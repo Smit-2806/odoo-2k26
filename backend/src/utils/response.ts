@@ -1,0 +1,2 @@
+// Utility: response.ts
+export {};

@@ -1,0 +1,2 @@
+// Axios instance configuration
+export {};

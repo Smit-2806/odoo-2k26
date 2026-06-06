@@ -1,0 +1,2 @@
+// Utility: generateInvoiceNumber.ts
+export {};

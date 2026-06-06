@@ -1,0 +1,2 @@
+// Middleware: authenticate.ts
+export {};

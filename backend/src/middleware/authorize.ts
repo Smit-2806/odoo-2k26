@@ -1,0 +1,2 @@
+// Middleware: authorize.ts
+export {};

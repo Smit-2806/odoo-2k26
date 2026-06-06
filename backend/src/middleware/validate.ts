@@ -1,0 +1,2 @@
+// Middleware: validate.ts
+export {};
