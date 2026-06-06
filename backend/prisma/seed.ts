@@ -252,6 +252,27 @@ async function main() {
     },
   });
 
+  // Seed Approvals for quote1
+  await prisma.approval.create({
+    data: {
+      quotationId: quote1.id,
+      approverId: procurement.id,
+      approved: true,
+      comments: 'L1 Review: Checked pricing sheets and recommended.',
+      createdAt: new Date('2026-06-04T09:15:00Z'),
+    },
+  });
+
+  await prisma.approval.create({
+    data: {
+      quotationId: quote1.id,
+      approverId: finance.id,
+      approved: true,
+      comments: 'L2 Approved: Budget matches Q2 projections. PO generated.',
+      createdAt: new Date('2026-06-04T21:15:00Z'),
+    },
+  });
+
   // 6. Create Invoice
   await prisma.invoice.create({
     data: {

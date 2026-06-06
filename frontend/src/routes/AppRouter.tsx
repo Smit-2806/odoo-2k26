@@ -16,6 +16,8 @@ import { PurchaseOrders } from '../pages/purchase-orders/PurchaseOrders';
 import { Invoices } from '../pages/invoices/Invoices';
 import { ActivityLogs } from '../pages/notifications/ActivityLogs';
 import { Reports } from '../pages/reports/Reports';
+import { ProtectedRoute } from './ProtectedRoute';
+import { RoleGuard } from './RoleGuard';
 
 export const AppRouter: React.FC = () => {
   return (
@@ -25,33 +27,103 @@ export const AppRouter: React.FC = () => {
         <Route path="/" element={<PublicLayout />}>
           <Route index element={<LandingPage />} />
         </Route>
-
+ 
         {/* Auth routes */}
         <Route path="/auth" element={<AuthLayout />}>
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="index" element={<Navigate to="login" replace />} />
         </Route>
-
+ 
         {/* Dashboard / ERP routes */}
-        <Route path="/dashboard" element={<DashboardLayout />}>
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Dashboard />} />
-          <Route path="vendors" element={<Vendors />} />
-          <Route path="rfqs" element={<RFQs />} />
-          <Route path="quotations" element={<Quotations />} />
-          <Route path="quotations/compare/:rfqId" element={<QuotationComparison />} />
-          <Route path="approvals" element={<Approvals />} />
-          <Route path="purchase-orders" element={<PurchaseOrders />} />
-          <Route path="invoices" element={<Invoices />} />
-          <Route path="activity" element={<ActivityLogs />} />
-          <Route path="reports" element={<Reports />} />
+          <Route 
+            path="vendors" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'PROCUREMENT']}>
+                <Vendors />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="rfqs" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'PROCUREMENT']}>
+                <RFQs />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="quotations" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'VENDOR', 'PROCUREMENT']}>
+                <Quotations />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="quotations/compare/:rfqId" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'PROCUREMENT']}>
+                <QuotationComparison />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="approvals" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'PROCUREMENT', 'FINANCE']}>
+                <Approvals />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="purchase-orders" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'PROCUREMENT', 'FINANCE', 'VENDOR']}>
+                <PurchaseOrders />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="invoices" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'FINANCE', 'VENDOR']}>
+                <Invoices />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="activity" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'PROCUREMENT', 'FINANCE']}>
+                <ActivityLogs />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="reports" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'PROCUREMENT', 'FINANCE']}>
+                <Reports />
+              </RoleGuard>
+            } 
+          />
         </Route>
-
+ 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
 };
-
+ 
 export default AppRouter;

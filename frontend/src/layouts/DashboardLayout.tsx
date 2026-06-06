@@ -87,8 +87,26 @@ export const DashboardLayout: React.FC = () => {
   ];
 
   const handleRoleChange = (role: Role) => {
-    const email = `${role.toLowerCase()}@vendorbridge.com`;
-    login(email, role);
+    let email = '';
+    switch (role) {
+      case 'PROCUREMENT':
+        email = 'officer@vendorbridge.com';
+        break;
+      case 'FINANCE':
+        email = 'finance@vendorbridge.com';
+        break;
+      case 'ADMIN':
+        email = 'admin@vendorbridge.com';
+        break;
+      case 'VENDOR':
+        email = 'vendor@infra-supplies.com';
+        break;
+      default:
+        email = '';
+    }
+    if (email) {
+      login(email, role);
+    }
   };
 
   const getRoleColor = (role: string) => {

@@ -1,54 +1,66 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProcurementStore } from '../../store/procurementStore';
-import { ArrowLeft, Award, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Award, HelpCircle, Layers } from 'lucide-react';
 
 export const QuotationComparison: React.FC = () => {
   const { rfqId } = useParams();
   const navigate = useNavigate();
-  const { rfqs, approveQuotation } = useProcurementStore();
+  const { rfqs, quotations, fetchQuotations, approveQuotation } = useProcurementStore();
 
-  const rfq = rfqs.find(r => r.id === rfqId) || rfqs[0];
+  React.useEffect(() => {
+    if (rfqId) {
+      fetchQuotations(rfqId);
+    }
+  }, [rfqId, fetchQuotations]);
+
+  const rfq = rfqs.find(r => r.id === rfqId);
+  const rfqQuotes = quotations.filter(q => q.rfqId === rfqId);
+
+  const lowestTotal = rfqQuotes.length > 0 
+    ? Math.min(...rfqQuotes.map(q => q.grandTotal)) 
+    : 0;
+
+  const bids = rfqQuotes.map(q => ({
+    id: q.id,
+    vendorName: q.vendorName,
+    grandTotal: q.grandTotal,
+    gstPercent: q.gstPercent || 18,
+    deliveryDays: q.deliveryDays,
+    rating: `${q.rating || '4.2'}/5`,
+    paymentTerms: q.paymentTerms,
+    isLowest: q.grandTotal === lowestTotal && rfqQuotes.length > 1
+  }));
 
   const handleSelectVendor = (qId: string, vendorName: string) => {
-    // Select vendor -> triggers L1/L2 approval workflow
-    approveQuotation(qId, `Automatic approval triggered for lowest bidder: ${vendorName}`, true);
+    // Select vendor -> triggers L1 review -> status UNDER_REVIEW
+    approveQuotation(qId, `L1 Review: Selected bid from ${vendorName} for final approval`, true);
     navigate('/dashboard/approvals');
   };
 
-  // Mocked bids matching Excalidraw Screen 7 specs
-  const bids = [
-    {
-      id: 'q-infra',
-      vendorName: 'Infra Supplies (Lowest)',
-      grandTotal: 185400,
-      gstPercent: 18,
-      deliveryDays: 10,
-      rating: '4.5/5',
-      paymentTerms: '30 days',
-      isLowest: true
-    },
-    {
-      id: 'q-tech',
-      vendorName: 'TechCore LTD',
-      grandTotal: 200010,
-      gstPercent: 18,
-      deliveryDays: 14,
-      rating: '4.2/5',
-      paymentTerms: '30 days',
-      isLowest: false
-    },
-    {
-      id: 'q-office',
-      vendorName: 'Office Need Co.',
-      grandTotal: 214800,
-      gstPercent: 18,
-      deliveryDays: 7,
-      rating: '3.8/5',
-      paymentTerms: '15 days',
-      isLowest: false
-    }
-  ];
+  if (rfqQuotes.length === 0) {
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/dashboard/rfqs')}
+            className="p-1.5 rounded-lg border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            <ArrowLeft className="h-4.5 w-4.5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Quotation Comparison</h1>
+            <p className="text-sm text-slate-400 mt-1">RFQ: {rfq?.title || 'Unknown RFQ'}</p>
+          </div>
+        </div>
+        <div className="p-12 bg-slate-900/20 border border-slate-800 text-center rounded-2xl">
+          <Layers className="h-10 w-10 text-slate-700 mx-auto mb-3 animate-pulse" />
+          <p className="text-slate-400 font-semibold">No quotations received yet</p>
+          <p className="text-xs text-slate-600 mt-1">Vendors have not submitted any bids for this RFQ.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

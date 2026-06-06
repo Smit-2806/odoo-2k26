@@ -8,7 +8,7 @@ import {
 
 export const Approvals: React.FC = () => {
   const navigate = useNavigate();
-  const { quotations, approveQuotation } = useProcurementStore();
+  const { quotations, approveQuotation, currentUser } = useProcurementStore();
   const [comments, setComments] = useState('');
 
   const activeQuotation =
@@ -26,17 +26,23 @@ export const Approvals: React.FC = () => {
     if (approve) navigate('/dashboard/purchase-orders');
   };
 
+  const l1Approval = activeQuotation?.approvals?.find(a => a.approver.role === 'PROCUREMENT');
+  const l2Approval = activeQuotation?.approvals?.find(a => a.approver.role === 'FINANCE' || a.approver.role === 'ADMIN');
+
+  const hasL1 = activeQuotation?.status === 'UNDER_REVIEW' || activeQuotation?.status === 'APPROVED' || !!l1Approval;
+  const hasL2 = activeQuotation?.status === 'APPROVED' || !!l2Approval;
+
   const steps = [
     { num: 1, label: 'Submitted',   done: true,  active: false },
-    { num: 2, label: 'L1 Review',   done: true,  active: false },
+    { num: 2, label: 'L1 Review',   done: hasL1,  active: !hasL1 },
     {
       num: 3, label: 'L2 Approval',
-      done: activeQuotation?.status === 'APPROVED',
-      active: activeQuotation?.status !== 'APPROVED',
+      done: hasL2,
+      active: hasL1 && !hasL2,
     },
     {
       num: 4, label: 'Generate PO',
-      done: activeQuotation?.status === 'APPROVED',
+      done: hasL2,
       active: false,
     },
   ];
@@ -63,7 +69,7 @@ export const Approvals: React.FC = () => {
               <div className="absolute top-4 left-0 right-0 h-0.5 bg-slate-800 z-0" />
               <div
                 className="absolute top-4 left-0 h-0.5 z-0 bg-gradient-to-r from-purple-500 to-emerald-500 transition-all duration-700"
-                style={{ width: activeQuotation.status === 'APPROVED' ? '100%' : '50%' }}
+                style={{ width: hasL2 ? '100%' : hasL1 ? '50%' : '25%' }}
               />
               {steps.map((s) => (
                 <div key={s.label} className="relative z-10 flex flex-col items-center gap-2 flex-1">
@@ -96,7 +102,7 @@ export const Approvals: React.FC = () => {
                   Grand Total: ₹{Number(activeQuotation.grandTotal).toLocaleString('en-IN')}
                 </p>
               </div>
-              {activeQuotation.status === 'APPROVED' && (
+              {hasL2 && (
                 <span className="flex items-center gap-1.5 badge badge-approved text-sm px-3 py-1.5">
                   <CheckCircle2 className="h-4 w-4" /> Approved
                 </span>
@@ -143,51 +149,75 @@ export const Approvals: React.FC = () => {
 
                 {/* L1 */}
                 <div className="relative">
-                  <div className="absolute -left-[27px] top-0.5 h-6 w-6 rounded-full bg-emerald-600 border-2 border-emerald-500 flex items-center justify-center">
-                    <Check className="h-3 w-3 text-white" />
+                  <div className={`absolute -left-[27px] top-0.5 h-6 w-6 rounded-full border-2 flex items-center justify-center ${
+                    hasL1 ? 'bg-emerald-600 border-emerald-500' : 'bg-purple-600/20 border-purple-500'
+                  }`}>
+                    {hasL1
+                      ? <Check className="h-3 w-3 text-white" />
+                      : <Circle className="h-3 w-3 text-purple-400 animate-pulse" />
+                    }
                   </div>
-                  <p className="text-sm font-bold text-slate-200">Rahul Mehta</p>
+                  <p className="text-sm font-bold text-slate-200">
+                    {l1Approval?.approver.name || 'Rahul Mehta'}
+                  </p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Procurement Head · L1 Reviewer</p>
-                  <p className="text-[10px] text-emerald-400 font-bold mt-1">✓ Approved on May 20, 10:32 AM</p>
+                  {hasL1 ? (
+                    <p className="text-[10px] text-emerald-400 font-bold mt-1">✓ Approved</p>
+                  ) : (
+                    <p className="text-[10px] text-purple-400 font-bold mt-1">⏳ Awaiting selection</p>
+                  )}
                   <p className="text-[10px] text-slate-500 italic mt-1">
-                    "Quotation prices verified. Initiating L2 finance review."
+                    "{l1Approval?.comments || 'Quotation prices verified. Selected as best option.'}"
                   </p>
                 </div>
 
                 {/* L2 */}
                 <div className="relative">
                   <div className={`absolute -left-[27px] top-0.5 h-6 w-6 rounded-full border-2 flex items-center justify-center ${
-                    activeQuotation.status === 'APPROVED'
+                    hasL2
                       ? 'bg-emerald-600 border-emerald-500'
-                      : 'bg-purple-600/20 border-purple-500'
+                      : hasL1
+                      ? 'bg-purple-600/20 border-purple-500'
+                      : 'bg-slate-900 border-slate-700'
                   }`}>
-                    {activeQuotation.status === 'APPROVED'
+                    {hasL2
                       ? <Check className="h-3 w-3 text-white" />
-                      : <Circle className="h-3 w-3 text-purple-400 animate-pulse" />
+                      : hasL1
+                      ? <Circle className="h-3 w-3 text-purple-400 animate-pulse" />
+                      : <Circle className="h-3 w-3 text-slate-700" />
                     }
                   </div>
-                  <p className="text-sm font-bold text-slate-200">Priya Shah</p>
+                  <p className="text-sm font-bold text-slate-200">
+                    {l2Approval?.approver.name || 'Priya Shah'}
+                  </p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Finance Manager · L2 Approver</p>
-                  {activeQuotation.status === 'APPROVED' ? (
+                  {hasL2 ? (
                     <p className="text-[10px] text-emerald-400 font-bold mt-1">✓ Approved · PO Generated</p>
+                  ) : hasL1 ? (
+                    <p className="text-[10px] text-purple-400 font-bold mt-1">⏳ Awaiting L2 Review</p>
                   ) : (
-                    <p className="text-[10px] text-purple-400 font-bold mt-1">⏳ Awaiting review — Assigned May 21</p>
+                    <p className="text-[10px] text-slate-600 mt-1">⏳ Awaiting L1 Review first</p>
+                  )}
+                  {l2Approval?.comments && (
+                    <p className="text-[10px] text-slate-500 italic mt-1">
+                      "{l2Approval.comments}"
+                    </p>
                   )}
                 </div>
 
                 {/* L3 – PO Generation */}
                 <div className="relative">
                   <div className={`absolute -left-[27px] top-0.5 h-6 w-6 rounded-full border-2 flex items-center justify-center ${
-                    activeQuotation.status === 'APPROVED'
+                    hasL2
                       ? 'bg-emerald-600 border-emerald-500'
                       : 'bg-slate-900 border-slate-700'
                   }`}>
-                    {activeQuotation.status === 'APPROVED'
+                    {hasL2
                       ? <Check className="h-3 w-3 text-white" />
                       : <ArrowRight className="h-3 w-3 text-slate-600" />
                     }
                   </div>
-                  <p className={`text-sm font-bold ${activeQuotation.status === 'APPROVED' ? 'text-slate-200' : 'text-slate-600'}`}>
+                  <p className={`text-sm font-bold ${hasL2 ? 'text-slate-200' : 'text-slate-600'}`}>
                     PO Generation
                   </p>
                   <p className="text-[10px] text-slate-600 mt-0.5">Auto-generated on approval</p>
@@ -196,8 +226,8 @@ export const Approvals: React.FC = () => {
             </div>
           </div>
 
-          {/* ─── Approval Actions ─────────────────────────── */}
-          {activeQuotation.status !== 'APPROVED' && (
+          {/* ─── Approval Actions (FINANCE or ADMIN role only) ─── */}
+          {activeQuotation.status === 'UNDER_REVIEW' && (currentUser?.role === 'FINANCE' || currentUser?.role === 'ADMIN') && (
             <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-6 space-y-4">
               <label className="flex items-center gap-2 text-sm font-bold text-white">
                 <MessageSquare className="h-4 w-4 text-purple-400" />
@@ -227,6 +257,32 @@ export const Approvals: React.FC = () => {
                   <Award className="h-4 w-4" />
                   Approve & Generate PO
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Awaiting L2 Review card for PROCUREMENT role */}
+          {activeQuotation.status === 'UNDER_REVIEW' && currentUser?.role === 'PROCUREMENT' && (
+            <div className="flex items-center gap-3 p-5 bg-purple-500/5 border border-purple-500/20 rounded-2xl">
+              <AlertCircle className="h-5 w-5 text-purple-400 shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-purple-400">Awaiting Finance Approval</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  L1 review is complete. This quotation is currently pending L2 review and approval by the Finance Manager.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Quotation still in SUBMITTED state */}
+          {activeQuotation.status === 'SUBMITTED' && (
+            <div className="flex items-center gap-3 p-5 bg-amber-500/5 border border-amber-500/20 rounded-2xl">
+              <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-amber-400">Awaiting L1 Review</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  This quotation has been submitted by the vendor but has not been selected for review yet. Go to the RFQs comparison screen to perform L1 Review.
+                </p>
               </div>
             </div>
           )}

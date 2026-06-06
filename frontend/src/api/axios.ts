@@ -31,6 +31,7 @@ apiClient.interceptors.response.use(
       // Clear local storage on auth failure
       localStorage.removeItem('vendorbridge_token');
       localStorage.removeItem('vendorbridge_user');
+      window.dispatchEvent(new Event('auth-unauthorized'));
     }
     return Promise.reject(error);
   }

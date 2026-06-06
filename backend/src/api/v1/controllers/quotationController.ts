@@ -143,6 +143,13 @@ export const getQuotations = async (req: AuthRequest, res: Response) => {
           include: {
             rfqItem: true
           }
+        },
+        approvals: {
+          include: {
+            approver: {
+              select: { id: true, name: true, role: true, email: true }
+            }
+          }
         }
       }
     });
@@ -174,7 +181,14 @@ export const getQuotations = async (req: AuthRequest, res: Response) => {
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
           name: item.rfqItem?.name || 'Item'
-        }))
+        })),
+        approvals: q.approvals?.map(app => ({
+          id: app.id,
+          approved: app.approved,
+          comments: app.comments,
+          createdAt: app.createdAt.toISOString(),
+          approver: app.approver
+        })) || []
       };
     });
 
@@ -202,6 +216,13 @@ export const getQuotationById = async (req: AuthRequest, res: Response) => {
         items: {
           include: {
             rfqItem: true
+          }
+        },
+        approvals: {
+          include: {
+            approver: {
+              select: { id: true, name: true, role: true, email: true }
+            }
           }
         }
       }
@@ -239,7 +260,14 @@ export const getQuotationById = async (req: AuthRequest, res: Response) => {
         unitPrice: item.unitPrice,
         totalPrice: item.totalPrice,
         name: item.rfqItem?.name || 'Item'
-      }))
+      })),
+      approvals: q.approvals?.map(app => ({
+        id: app.id,
+        approved: app.approved,
+        comments: app.comments,
+        createdAt: app.createdAt.toISOString(),
+        approver: app.approver
+      })) || []
     };
 
     return res.status(200).json({
@@ -281,10 +309,24 @@ export const approveQuotation = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    const userRole = req.user!.role;
+
     const updatedQuotation = await prisma.$transaction(async (tx) => {
+      let nextStatus = quotation.status;
+
+      if (userRole === 'PROCUREMENT') {
+        // L1 Review
+        nextStatus = approve ? 'UNDER_REVIEW' : 'REJECTED';
+      } else if (userRole === 'FINANCE' || userRole === 'ADMIN') {
+        // L2 Approval
+        nextStatus = approve ? 'APPROVED' : 'REJECTED';
+      } else {
+        throw new Error('Unauthorized role for quotation approval/review.');
+      }
+
       const q = await tx.quotation.update({
         where: { id },
-        data: { status: approve ? 'APPROVED' : 'REJECTED' }
+        data: { status: nextStatus }
       });
 
       // Add approval logs
@@ -293,11 +335,11 @@ export const approveQuotation = async (req: AuthRequest, res: Response) => {
           quotationId: id,
           approverId: req.user!.id,
           approved: approve,
-          comments: comments || ''
+          comments: comments || (userRole === 'PROCUREMENT' ? 'L1 Verified' : 'L2 Approved')
         }
       });
 
-      if (approve) {
+      if (approve && (userRole === 'FINANCE' || userRole === 'ADMIN')) {
         // Auto-generate Purchase Order
         const poCount = await tx.purchaseOrder.count();
         const poNumber = `PO-2026-000${poCount + 1}`;
@@ -332,16 +374,25 @@ export const approveQuotation = async (req: AuthRequest, res: Response) => {
         await tx.auditLog.create({
           data: {
             category: 'APPROVAL',
-            message: `Quotation approved - PO ${po.poNumber} generated for ${quotation.vendor.companyName}. Comments: ${comments || 'None'}`,
+            message: `Quotation L2 approved - PO ${po.poNumber} generated for ${quotation.vendor.companyName}. Comments: ${comments || 'None'}`,
+            user: req.user?.name || 'System'
+          }
+        });
+      } else if (!approve) {
+        // Rejection Audit Log
+        await tx.auditLog.create({
+          data: {
+            category: 'APPROVAL',
+            message: `Quotation rejected (${userRole === 'PROCUREMENT' ? 'L1' : 'L2'}) - Bid from ${quotation.vendor.companyName} marked rejected. Comments: ${comments || 'None'}`,
             user: req.user?.name || 'System'
           }
         });
       } else {
-        // Audit Log
+        // L1 Recommendation Audit Log (Procurement selected a vendor, awaiting Finance L2)
         await tx.auditLog.create({
           data: {
             category: 'APPROVAL',
-            message: `Quotation rejected - Bid from ${quotation.vendor.companyName} marked rejected. Comments: ${comments || 'None'}`,
+            message: `Quotation L1 verified - Selected bid from ${quotation.vendor.companyName} submitted for L2 Finance approval. Comments: ${comments || 'None'}`,
             user: req.user?.name || 'System'
           }
         });

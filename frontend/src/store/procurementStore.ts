@@ -57,6 +57,19 @@ export interface QuotationItem {
   name?: string;
 }
 
+export interface Approval {
+  id: string;
+  approved: boolean;
+  comments: string;
+  createdAt: string;
+  approver: {
+    id: string;
+    name: string;
+    role: Role;
+    email: string;
+  };
+}
+
 export interface Quotation {
   id: string;
   rfqId: string;
@@ -73,6 +86,7 @@ export interface Quotation {
   grandTotal: number;
   notes?: string;
   createdAt: string;
+  approvals?: Approval[];
 }
 
 export interface PurchaseOrder {
@@ -158,15 +172,15 @@ interface ProcurementState {
 
 const getInitialUser = (): User | null => {
   const userStr = localStorage.getItem('vendorbridge_user');
-  if (userStr) {
+  const token = localStorage.getItem('vendorbridge_token');
+  if (userStr && token) {
     try {
       return JSON.parse(userStr);
     } catch (e) {
       return null;
     }
   }
-  // Default starting demo session
-  return { id: 'u-officer', email: 'officer@vendorbridge.com', name: 'Rahul Mehta', role: 'PROCUREMENT' };
+  return null;
 };
 
 export const useProcurementStore = create<ProcurementState>((set, get) => ({
@@ -340,6 +354,7 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
         submissionDeadline: rfq.submissionDeadline,
         deliveryTerms: rfq.deliveryTerms,
         paymentTerms: rfq.paymentTerms,
+        category: rfq.category,
         items: rfq.items
       });
       await get().fetchRfqs();
@@ -408,3 +423,9 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
     }
   }
 }));
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth-unauthorized', () => {
+    useProcurementStore.getState().logout();
+  });
+}

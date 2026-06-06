@@ -3,12 +3,12 @@ import { prisma } from '../../../database/prisma';
 import { AuthRequest } from '../../../types/user';
 
 export const createRfq = async (req: AuthRequest, res: Response) => {
-  const { title, description, submissionDeadline, deliveryTerms, paymentTerms, items } = req.body;
+  const { title, description, submissionDeadline, deliveryTerms, paymentTerms, category, items } = req.body;
 
-  if (!title || !description || !submissionDeadline || !items || !Array.isArray(items)) {
+  if (!title || !description || !submissionDeadline || !category || !items || !Array.isArray(items)) {
     return res.status(400).json({
       success: false,
-      error: { message: 'Required fields: title, description, submissionDeadline, items.' }
+      error: { message: 'Required fields: title, description, submissionDeadline, category, items.' }
     });
   }
 
@@ -17,6 +17,7 @@ export const createRfq = async (req: AuthRequest, res: Response) => {
       data: {
         title,
         description,
+        category,
         submissionDeadline: new Date(submissionDeadline),
         deliveryTerms: deliveryTerms || 'FOB',
         paymentTerms: paymentTerms || '30 days net',
