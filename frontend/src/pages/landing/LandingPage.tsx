@@ -121,7 +121,7 @@ export const LandingPage: React.FC = () => {
               </button>
               <button 
                 onClick={() => navigate('/auth/register')}
-                className="w-full sm:w-auto px-8 py-3 rounded-lg border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] text-slate-300 hover:text-white transition-colors"
+                className="w-full sm:w-auto px-8 py-3 rounded-lg border border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 transition-all font-semibold shadow-lg shadow-purple-500/10"
               >
                 Supplier Portal
               </button>
