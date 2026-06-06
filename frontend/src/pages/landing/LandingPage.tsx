@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, FileText, CheckSquare, BarChart3, ArrowRight, Users, Circle } from 'lucide-react';
+import { Shield, FileText, CheckSquare, BarChart3, ArrowRight, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { HeroGeometric } from '@/components/ui/HeroGeometric';
 
@@ -77,19 +77,10 @@ export const LandingPage: React.FC = () => {
       <HeroGeometric>
         <main className="flex-1 flex flex-col items-center justify-center px-6 py-20 text-center relative w-full">
           <div className="max-w-4xl mx-auto space-y-8 relative z-10">
-            <motion.div
-              custom={0}
-              variants={fadeUpVariants}
-              initial="hidden"
-              animate="visible"
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-white/[0.03] text-purple-300 text-xs font-semibold tracking-wide uppercase"
-            >
-              <Circle className="h-2 w-2 fill-rose-500/80 animate-pulse" />
-              Active Platform Development
-            </motion.div>
+
 
             <motion.h1
-              custom={1}
+              custom={0}
               variants={fadeUpVariants}
               initial="hidden"
               animate="visible"
@@ -105,7 +96,7 @@ export const LandingPage: React.FC = () => {
             </motion.h1>
 
             <motion.p
-              custom={2}
+              custom={1}
               variants={fadeUpVariants}
               initial="hidden"
               animate="visible"
@@ -115,7 +106,7 @@ export const LandingPage: React.FC = () => {
             </motion.p>
 
             <motion.div
-              custom={3}
+              custom={2}
               variants={fadeUpVariants}
               initial="hidden"
               animate="visible"
@@ -143,7 +134,7 @@ export const LandingPage: React.FC = () => {
               {features.map((feat, index) => (
                 <motion.div 
                   key={index}
-                  custom={4 + index}
+                  custom={3 + index}
                   variants={fadeUpVariants}
                   initial="hidden"
                   animate="visible"
