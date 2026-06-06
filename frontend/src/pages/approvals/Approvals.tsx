@@ -8,29 +8,36 @@ import {
 
 export const Approvals: React.FC = () => {
   const navigate = useNavigate();
-  const { quotations, approveQuotation, currentUser } = useProcurementStore();
+  const { approvals, fetchApprovals, actionApproval, currentUser } = useProcurementStore();
   const [comments, setComments] = useState('');
+  const [selectedApprovalId, setSelectedApprovalId] = useState<string | null>(null);
 
-  const activeQuotation =
-    quotations.find(q => q.status === 'SUBMITTED' || q.status === 'UNDER_REVIEW') ||
-    quotations[0];
+  React.useEffect(() => {
+    fetchApprovals();
+  }, [fetchApprovals]);
 
-  const handleAction = (approve: boolean) => {
-    if (!activeQuotation) return;
-    approveQuotation(
-      activeQuotation.id,
-      comments || (approve ? 'Approved by L2 Finance Manager' : 'Rejected by L2 Finance Manager'),
-      approve
+  const pendingApprovals = approvals.filter(a => a.status === 'PENDING');
+  const activeApproval = approvals.find(a => a.id === selectedApprovalId) || pendingApprovals[0] || approvals[0];
+  const activeQuotation = activeApproval?.quotation;
+
+  const handleAction = async (approve: boolean) => {
+    if (!activeApproval) return;
+    await actionApproval(
+      activeApproval.id,
+      approve,
+      comments || (approve ? 'Approved by L2 Finance Manager' : 'Rejected by L2 Finance Manager')
     );
     setComments('');
     if (approve) navigate('/dashboard/purchase-orders');
   };
 
-  const l1Approval = activeQuotation?.approvals?.find(a => a.approver.role === 'PROCUREMENT');
-  const l2Approval = activeQuotation?.approvals?.find(a => a.approver.role === 'FINANCE' || a.approver.role === 'ADMIN');
+  // Get approvals matching this quotation
+  const quotationApprovals = approvals.filter(a => a.quotationId === activeQuotation?.id);
+  const l1Approval = quotationApprovals.find(a => a.stage === 1);
+  const l2Approval = quotationApprovals.find(a => a.stage === 2);
 
-  const hasL1 = activeQuotation?.status === 'UNDER_REVIEW' || activeQuotation?.status === 'APPROVED' || !!l1Approval;
-  const hasL2 = activeQuotation?.status === 'APPROVED' || !!l2Approval;
+  const hasL1 = l1Approval?.status === 'L1_APPROVED' || activeQuotation?.status === 'SHORTLISTED' || activeQuotation?.status === 'APPROVED';
+  const hasL2 = l2Approval?.status === 'L2_APPROVED' || activeQuotation?.status === 'APPROVED';
 
   const steps = [
     { num: 1, label: 'Submitted',   done: true,  active: false },
@@ -47,9 +54,13 @@ export const Approvals: React.FC = () => {
     },
   ];
 
+  const vendorName = activeQuotation?.vendorName || activeQuotation?.vendor?.companyName || 'Unknown Vendor';
+  const rfqTitle = activeQuotation?.rfq?.title || 'Unknown RFQ';
+  const grandTotal = activeQuotation?.grandTotal || activeQuotation?.totalAmount || 0;
+
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ─── Header ───────────────────────────────────────── */}
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-black text-white tracking-tight">Approval Workflow</h1>
         <p className="text-sm text-slate-400 mt-0.5">
@@ -57,10 +68,39 @@ export const Approvals: React.FC = () => {
         </p>
       </div>
 
+      {/* Review Queue Selector */}
+      {approvals.length > 0 && (
+        <div className="bg-slate-900/20 border border-slate-800 rounded-2xl p-4 flex flex-wrap gap-2 items-center">
+          <span className="text-xs font-bold text-slate-400 mr-2">Review Queue:</span>
+          {approvals.map((app) => {
+            const isSelected = activeApproval?.id === app.id;
+            const q = app.quotation;
+            if (!q) return null;
+            const vName = q.vendorName || q.vendor?.companyName || 'Vendor';
+            return (
+              <button
+                key={app.id}
+                onClick={() => setSelectedApprovalId(app.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-purple-600 text-white border border-purple-500 shadow-lg shadow-purple-500/20'
+                    : app.status === 'PENDING'
+                    ? 'bg-slate-950/40 text-purple-300 border border-slate-800 hover:border-purple-500/30'
+                    : 'bg-slate-950/40 text-slate-500 border border-slate-900'
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${app.status === 'PENDING' ? 'bg-amber-400' : app.status === 'L2_APPROVED' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                {vName} (₹{Number(q.totalAmount || q.grandTotal).toLocaleString('en-IN')})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {activeQuotation ? (
         <div className="space-y-5">
 
-          {/* ─── Progress Stepper ─────────────────────────── */}
+          {/* Progress Stepper */}
           <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-6">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-5">
               Approval Chain Progress
@@ -90,27 +130,27 @@ export const Approvals: React.FC = () => {
             </div>
           </div>
 
-          {/* ─── Quotation Context Banner ─────────────────── */}
+          {/* Quotation Context Banner */}
           <div className="bg-gradient-to-r from-purple-600/10 to-blue-500/10 border border-purple-500/20 rounded-2xl p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Target Quotation</p>
                 <h2 className="text-lg font-bold text-white mt-1">
-                  RFQ: Office Furniture Q2 — {activeQuotation.vendorName}
+                  RFQ: {rfqTitle} — {vendorName}
                 </h2>
                 <p className="text-sm text-purple-400 font-bold mt-1">
-                  Grand Total: ₹{Number(activeQuotation.grandTotal).toLocaleString('en-IN')}
+                  Grand Total: ₹{Number(grandTotal).toLocaleString('en-IN')}
                 </p>
               </div>
               {hasL2 && (
-                <span className="flex items-center gap-1.5 badge badge-approved text-sm px-3 py-1.5">
+                <span className="flex items-center gap-1.5 badge bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm px-3 py-1.5 rounded-xl">
                   <CheckCircle2 className="h-4 w-4" /> Approved
                 </span>
               )}
             </div>
           </div>
 
-          {/* ─── Two column layout ────────────────────────── */}
+          {/* Two column layout */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
             {/* Quotation Summary */}
@@ -120,9 +160,9 @@ export const Approvals: React.FC = () => {
               </h3>
               <div className="space-y-3 text-sm">
                 {[
-                  { label: 'Vendor', value: activeQuotation.vendorName, cls: 'text-slate-200 font-semibold' },
-                  { label: 'Grand Total', value: `₹${Number(activeQuotation.grandTotal).toLocaleString('en-IN')}`, cls: 'text-purple-400 font-bold font-mono' },
-                  { label: 'Delivery Schedule', value: `${activeQuotation.deliveryDays} days`, cls: 'text-slate-200' },
+                  { label: 'Vendor', value: vendorName, cls: 'text-slate-200 font-semibold' },
+                  { label: 'Grand Total', value: `₹${Number(grandTotal).toLocaleString('en-IN')}`, cls: 'text-purple-400 font-bold font-mono' },
+                  { label: 'Delivery Schedule', value: `${activeQuotation.deliveryDays || 10} days`, cls: 'text-slate-200' },
                   { label: 'Payment Terms', value: activeQuotation.paymentTerms, cls: 'text-slate-200' },
                   { label: 'Vendor Rating', value: `${activeQuotation.rating || '4.5'}/5`, cls: 'text-amber-400 font-bold' },
                 ].map(({ label, value, cls }) => (
@@ -158,7 +198,7 @@ export const Approvals: React.FC = () => {
                     }
                   </div>
                   <p className="text-sm font-bold text-slate-200">
-                    {l1Approval?.approver.name || 'Rahul Mehta'}
+                    {l1Approval?.approver?.name || 'Rahul Mehta'}
                   </p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Procurement Head · L1 Reviewer</p>
                   {hasL1 ? (
@@ -166,7 +206,7 @@ export const Approvals: React.FC = () => {
                   ) : (
                     <p className="text-[10px] text-purple-400 font-bold mt-1">⏳ Awaiting selection</p>
                   )}
-                  <p className="text-[10px] text-slate-500 italic mt-1">
+                  <p className="text-[10px] text-slate-500 italic mt-1 font-semibold">
                     "{l1Approval?.comments || 'Quotation prices verified. Selected as best option.'}"
                   </p>
                 </div>
@@ -185,10 +225,10 @@ export const Approvals: React.FC = () => {
                       : hasL1
                       ? <Circle className="h-3 w-3 text-purple-400 animate-pulse" />
                       : <Circle className="h-3 w-3 text-slate-700" />
-                    }
+                  }
                   </div>
                   <p className="text-sm font-bold text-slate-200">
-                    {l2Approval?.approver.name || 'Priya Shah'}
+                    {l2Approval?.approver?.name || 'Priya Shah'}
                   </p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Finance Manager · L2 Approver</p>
                   {hasL2 ? (
@@ -199,7 +239,7 @@ export const Approvals: React.FC = () => {
                     <p className="text-[10px] text-slate-600 mt-1">⏳ Awaiting L1 Review first</p>
                   )}
                   {l2Approval?.comments && (
-                    <p className="text-[10px] text-slate-500 italic mt-1">
+                    <p className="text-[10px] text-slate-500 italic mt-1 font-semibold">
                       "{l2Approval.comments}"
                     </p>
                   )}
@@ -226,8 +266,8 @@ export const Approvals: React.FC = () => {
             </div>
           </div>
 
-          {/* ─── Approval Actions (FINANCE or ADMIN role only) ─── */}
-          {activeQuotation.status === 'UNDER_REVIEW' && (currentUser?.role === 'FINANCE' || currentUser?.role === 'ADMIN') && (
+          {/* Approval Actions (FINANCE or ADMIN role only) */}
+          {activeApproval?.status === 'PENDING' && activeApproval?.stage === 2 && (currentUser?.role === 'FINANCE' || currentUser?.role === 'ADMIN') && (
             <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-6 space-y-4">
               <label className="flex items-center gap-2 text-sm font-bold text-white">
                 <MessageSquare className="h-4 w-4 text-purple-400" />
@@ -262,7 +302,7 @@ export const Approvals: React.FC = () => {
           )}
 
           {/* Awaiting L2 Review card for PROCUREMENT role */}
-          {activeQuotation.status === 'UNDER_REVIEW' && currentUser?.role === 'PROCUREMENT' && (
+          {activeApproval?.status === 'PENDING' && activeApproval?.stage === 2 && currentUser?.role === 'PROCUREMENT' && (
             <div className="flex items-center gap-3 p-5 bg-purple-500/5 border border-purple-500/20 rounded-2xl">
               <AlertCircle className="h-5 w-5 text-purple-400 shrink-0" />
               <div>
@@ -287,7 +327,7 @@ export const Approvals: React.FC = () => {
             </div>
           )}
 
-          {activeQuotation.status === 'APPROVED' && (
+          {(activeQuotation.status === 'APPROVED' || activeApproval?.status === 'L2_APPROVED') && (
             <div className="flex items-center justify-between p-5 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-6 w-6 text-emerald-400" />

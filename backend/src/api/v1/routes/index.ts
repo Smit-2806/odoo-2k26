@@ -11,6 +11,7 @@ import * as pos from '../controllers/poController';
 import * as invoices from '../controllers/invoiceController';
 import * as reports from '../controllers/reportController';
 import * as logs from '../controllers/logController';
+import * as approvals from '../controllers/approvalController';
 
 const router = Router();
 
@@ -29,12 +30,20 @@ router.put('/vendors/:id/block', authenticate as any, authorize(['ADMIN']) as an
 router.post('/rfqs', authenticate as any, authorize(['ADMIN', 'PROCUREMENT']) as any, rfqs.createRfq);
 router.get('/rfqs', authenticate as any, rfqs.getRfqs);
 router.get('/rfqs/:id', authenticate as any, rfqs.getRfqById);
+router.put('/rfqs/:id/publish', authenticate as any, authorize(['ADMIN', 'PROCUREMENT']) as any, rfqs.publishRfq);
+router.put('/rfqs/:id/close', authenticate as any, authorize(['ADMIN', 'PROCUREMENT']) as any, rfqs.closeRfq);
 
 // 4. Quotations
 router.post('/quotations', authenticate as any, authorize(['VENDOR']) as any, quotations.submitQuotation);
 router.get('/quotations', authenticate as any, quotations.getQuotations);
 router.get('/quotations/:id', authenticate as any, quotations.getQuotationById);
 router.put('/quotations/:id/approve', authenticate as any, authorize(['ADMIN', 'PROCUREMENT', 'FINANCE']) as any, quotations.approveQuotation);
+router.put('/quotations/:id/shortlist', authenticate as any, authorize(['ADMIN', 'PROCUREMENT']) as any, quotations.shortlistQuotation);
+
+// 4.5 Approvals
+router.post('/approvals', authenticate as any, authorize(['ADMIN', 'PROCUREMENT']) as any, approvals.createApproval);
+router.get('/approvals', authenticate as any, approvals.getApprovals);
+router.put('/approvals/:id/action', authenticate as any, authorize(['ADMIN', 'FINANCE']) as any, approvals.actionApproval);
 
 // 5. Purchase Orders
 router.get('/purchase-orders', authenticate as any, pos.getPurchaseOrders);
@@ -44,6 +53,8 @@ router.put('/purchase-orders/:id/status', authenticate as any, pos.updatePoStatu
 // 6. Invoices
 router.get('/invoices', authenticate as any, invoices.getInvoices);
 router.put('/invoices/:id/status', authenticate as any, authorize(['ADMIN', 'FINANCE']) as any, invoices.updateInvoiceStatus);
+router.get('/invoices/:id/pdf', authenticate as any, invoices.getInvoicePdf);
+router.post('/invoices/:id/email', authenticate as any, invoices.emailInvoice);
 
 // 7. Reports
 router.get('/reports/stats', authenticate as any, reports.getStats);

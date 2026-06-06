@@ -6,7 +6,7 @@ import { ArrowLeft, Award, HelpCircle, Layers } from 'lucide-react';
 export const QuotationComparison: React.FC = () => {
   const { rfqId } = useParams();
   const navigate = useNavigate();
-  const { rfqs, quotations, fetchQuotations, approveQuotation } = useProcurementStore();
+  const { rfqs, quotations, fetchQuotations, shortlistQuotation } = useProcurementStore();
 
   React.useEffect(() => {
     if (rfqId) {
@@ -32,9 +32,8 @@ export const QuotationComparison: React.FC = () => {
     isLowest: q.grandTotal === lowestTotal && rfqQuotes.length > 1
   }));
 
-  const handleSelectVendor = (qId: string, vendorName: string) => {
-    // Select vendor -> triggers L1 review -> status UNDER_REVIEW
-    approveQuotation(qId, `L1 Review: Selected bid from ${vendorName} for final approval`, true);
+  const handleSelectVendor = async (qId: string) => {
+    await shortlistQuotation(qId);
     navigate('/dashboard/approvals');
   };
 
@@ -172,7 +171,7 @@ export const QuotationComparison: React.FC = () => {
           {bids.map((bid) => (
             <div key={bid.id} className="py-4 flex items-center justify-center">
               <button
-                onClick={() => handleSelectVendor(bid.id, bid.vendorName)}
+                onClick={() => handleSelectVendor(bid.id)}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold shadow-md transition-all ${
                   bid.isLowest
                     ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white'

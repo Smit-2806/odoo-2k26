@@ -39,6 +39,23 @@ export const submitQuotation = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Validate that the vendor is assigned to this RFQ
+    const assignment = await prisma.rfqAssignment.findUnique({
+      where: {
+        rfqId_vendorId: {
+          rfqId: rfqId,
+          vendorId: vendorProfile.id
+        }
+      }
+    });
+
+    if (!assignment) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'You are not invited to submit a quotation for this RFQ.' }
+      });
+    }
+
     // Calculate subtotal, gst, grandTotal
     let subtotal = 0;
     const itemsData = [];
@@ -410,6 +427,76 @@ export const approveQuotation = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({
       success: false,
       error: { message: error.message || 'Error processing approval.' }
+    });
+  }
+};
+
+export const shortlistQuotation = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const quotation = await prisma.quotation.findUnique({
+      where: { id },
+      include: { vendor: true, rfq: true }
+    });
+
+    if (!quotation) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Quotation not found.' }
+      });
+    }
+
+    const updatedQuotation = await prisma.$transaction(async (tx) => {
+      const q = await tx.quotation.update({
+        where: { id },
+        data: { status: 'SHORTLISTED' }
+      });
+
+      // Create L1 Approval record (already approved by this Procurement Officer/Admin)
+      await tx.approval.create({
+        data: {
+          quotationId: id,
+          approverId: req.user!.id,
+          approved: true,
+          status: 'L1_APPROVED',
+          stage: 1,
+          comments: 'Recommended for selection'
+        }
+      });
+
+      // Create pending L2 Approval record
+      await tx.approval.create({
+        data: {
+          quotationId: id,
+          approverId: null,
+          approved: false,
+          status: 'PENDING',
+          stage: 2,
+          comments: 'Awaiting L2 Finance Approval'
+        }
+      });
+
+      // Audit Log
+      await tx.auditLog.create({
+        data: {
+          category: 'APPROVAL',
+          message: `Quotation L1 verified - Selected bid from ${quotation.vendor.companyName} submitted for L2 Finance approval.`,
+          user: req.user?.name || 'System'
+        }
+      });
+
+      return q;
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: updatedQuotation
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message || 'Error shortlisting quotation.' }
     });
   }
 };

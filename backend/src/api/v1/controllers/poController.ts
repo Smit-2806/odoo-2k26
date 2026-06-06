@@ -131,6 +131,14 @@ export const updatePoStatus = async (req: AuthRequest, res: Response) => {
     });
   }
 
+  const validStatuses = ['DRAFT', 'GENERATED', 'SENT', 'ACCEPTED', 'COMPLETED', 'CANCELLED'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({
+      success: false,
+      error: { message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }
+    });
+  }
+
   try {
     const po = await prisma.purchaseOrder.update({
       where: { id },

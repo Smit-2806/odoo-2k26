@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding local SQLite database...');
+  console.log('Seeding local SQLite database for ERP flow...');
 
   // Clean database
   await prisma.auditLog.deleteMany({});
@@ -14,6 +14,7 @@ async function main() {
   await prisma.quotationItem.deleteMany({});
   await prisma.quotation.deleteMany({});
   await prisma.rfqItem.deleteMany({});
+  await prisma.rfqAssignment.deleteMany({});
   await prisma.rfq.deleteMany({});
   await prisma.vendorProfile.deleteMany({});
   await prisma.user.deleteMany({});
@@ -94,7 +95,7 @@ async function main() {
     },
   });
 
-  // 2. Create Vendor Profiles
+  // 2. Create Vendor Profiles with rating, category, and overdueInvoices
   const infraSupplies = await prisma.vendorProfile.create({
     data: {
       userId: vendorUser1.id,
@@ -105,6 +106,9 @@ async function main() {
       website: 'www.infrasupplies.com',
       status: 'APPROVED',
       businessFields: 'Furniture,Office Supplies',
+      rating: 4.5,
+      category: 'Furniture',
+      overdueInvoices: 0
     },
   });
 
@@ -118,6 +122,9 @@ async function main() {
       website: 'www.techcore.com',
       status: 'APPROVED',
       businessFields: 'IT,Furniture',
+      rating: 4.2,
+      category: 'IT Hardware / Software',
+      overdueInvoices: 0
     },
   });
 
@@ -131,6 +138,9 @@ async function main() {
       website: 'www.officeneed.com',
       status: 'APPROVED',
       businessFields: 'Office Supplies,Janitorial',
+      rating: 3.8,
+      category: 'Office Supplies',
+      overdueInvoices: 1
     },
   });
 
@@ -144,6 +154,9 @@ async function main() {
       website: 'www.fastlog.com',
       status: 'BLOCKED',
       businessFields: 'Logistics',
+      rating: 4.0,
+      category: 'Logistics',
+      overdueInvoices: 0
     },
   });
 
@@ -157,10 +170,13 @@ async function main() {
       website: 'www.greenservices.com',
       status: 'PENDING',
       businessFields: 'Janitorial,Logistics',
+      rating: 3.5,
+      category: 'Janitorial',
+      overdueInvoices: 0
     },
   });
 
-  // 3. Create RFQs
+  // 3. Create RFQs with Assignments
   const rfq1 = await prisma.rfq.create({
     data: {
       title: 'Office Furniture Procurement Q2',
@@ -177,6 +193,13 @@ async function main() {
           { name: 'Standing desk', quantity: 10, uom: 'NOS', description: 'Dual motor, 120x60cm wood top' },
         ],
       },
+      assignments: {
+        create: [
+          { vendorId: infraSupplies.id },
+          { vendorId: techCore.id },
+          { vendorId: officeNeed.id }
+        ]
+      }
     },
     include: {
       items: true,
@@ -184,6 +207,7 @@ async function main() {
   });
 
   // 4. Create Quotations
+  // quote1: Completed PO/Invoice scenario
   const quote1 = await prisma.quotation.create({
     data: {
       rfqId: rfq1.id,
@@ -213,11 +237,12 @@ async function main() {
     },
   });
 
+  // quote2: Pending Approval scenario (Procurement selected it L1, Finance Manager approval is pending)
   const quote2 = await prisma.quotation.create({
     data: {
       rfqId: rfq1.id,
       vendorId: techCore.id,
-      status: 'UNDER_REVIEW',
+      status: 'SHORTLISTED', // L1 Selected status
       validUntil: new Date('2026-07-05'),
       deliverySchedule: '14 days from PO release',
       paymentTerms: '30 days net',
@@ -240,7 +265,7 @@ async function main() {
     },
   });
 
-  // 5. Create Purchase Order
+  // 5. Create Purchase Order for quote1
   const po1 = await prisma.purchaseOrder.create({
     data: {
       poNumber: 'PO-2026-0001',
@@ -252,12 +277,37 @@ async function main() {
     },
   });
 
-  // Seed Approvals for quote1
+  // 6. Create Invoice for po1
+  const subtotal = 169500; // 87500 + 82000
+  const gstPercent = 18;
+  const tax = Math.round(subtotal * (gstPercent / 100)); // 30510
+  const total = subtotal + tax; // 200010
+
+  await prisma.invoice.create({
+    data: {
+      invoiceNumber: 'INV-2026-1024',
+      purchaseOrderId: po1.id,
+      status: 'SUBMITTED',
+      amount: total,
+      subtotal: subtotal,
+      tax: tax,
+      total: total,
+      invoiceDate: new Date('2026-06-05'),
+      dueDate: new Date('2026-07-05'),
+      fileUrl: '/uploads/invoices/inv-2026-1024.pdf',
+      pdfUrl: '/api/v1/invoices/inv-2026-1024/pdf',
+      emailStatus: 'SENT'
+    },
+  });
+
+  // 7. Seed approvals for quote1 (Completed PO approvals)
   await prisma.approval.create({
     data: {
       quotationId: quote1.id,
       approverId: procurement.id,
       approved: true,
+      status: 'L1_APPROVED',
+      stage: 1,
       comments: 'L1 Review: Checked pricing sheets and recommended.',
       createdAt: new Date('2026-06-04T09:15:00Z'),
     },
@@ -268,35 +318,50 @@ async function main() {
       quotationId: quote1.id,
       approverId: finance.id,
       approved: true,
+      status: 'L2_APPROVED',
+      stage: 2,
       comments: 'L2 Approved: Budget matches Q2 projections. PO generated.',
       createdAt: new Date('2026-06-04T21:15:00Z'),
     },
   });
 
-  // 6. Create Invoice
-  await prisma.invoice.create({
+  // 8. Seed approvals for quote2 (Pending Finance L2 approval)
+  await prisma.approval.create({
     data: {
-      invoiceNumber: 'INV-2026-1024',
-      purchaseOrderId: po1.id,
-      status: 'SUBMITTED',
-      amount: 200010.0,
-      invoiceDate: new Date('2026-06-05'),
-      dueDate: new Date('2026-07-05'),
-      fileUrl: '/uploads/invoices/inv-2026-1024.pdf',
+      quotationId: quote2.id,
+      approverId: procurement.id,
+      approved: true,
+      status: 'L1_APPROVED',
+      stage: 1,
+      comments: 'L1 Review: Tech specifications meet IT requirements. Recommend selection.',
+      createdAt: new Date('2026-06-05T10:00:00Z'),
     },
   });
 
-  // 7. Create Audit Logs
+  const pendingL2 = await prisma.approval.create({
+    data: {
+      quotationId: quote2.id,
+      approverId: null, // Pending assignee
+      approved: false,
+      status: 'PENDING',
+      stage: 2,
+      comments: null,
+      createdAt: new Date('2026-06-05T10:00:00Z'),
+    },
+  });
+
+  // 9. Create Audit Logs
   await prisma.auditLog.createMany({
     data: [
       { category: 'VENDOR', message: 'Vendor profile created - FastLog Transport registered and pending verification', timestamp: new Date('2026-06-01T15:20:00Z'), user: 'System' },
       { category: 'RFQ', message: 'RFQ published - office furniture Procurement Q2 sent to assigned vendors', timestamp: new Date('2026-06-02T10:00:00Z'), user: 'Rahul Mehta' },
-      { category: 'APPROVAL', message: 'Quotation selected - Infra Supplies Pvt Ltd selected for office furniture Q2', timestamp: new Date('2026-06-04T09:15:00Z'), user: 'Rahul Mehta' },
+      { category: 'APPROVAL', message: 'Quotation shortlisted - Infra Supplies Pvt Ltd selected for office furniture Q2', timestamp: new Date('2026-06-04T09:15:00Z'), user: 'Rahul Mehta' },
       { category: 'APPROVAL', message: 'Quotation approved - PO PO-2026-0001 generated for Infra Supplies Pvt Ltd', timestamp: new Date('2026-06-04T21:15:00Z'), user: 'Priya Shah' },
+      { category: 'APPROVAL', message: 'Quotation shortlisted - Tech Core LTD selected for office furniture Q2', timestamp: new Date('2026-06-05T10:00:00Z'), user: 'Rahul Mehta' },
     ],
   });
 
-  console.log('Local SQLite database seeded successfully!');
+  console.log('Local SQLite database seeded successfully for ERP flow!');
 }
 
 main()

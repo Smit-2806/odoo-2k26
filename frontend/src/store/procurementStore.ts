@@ -4,9 +4,9 @@ import apiClient from '../api/axios';
 export type Role = 'ADMIN' | 'PROCUREMENT' | 'FINANCE' | 'VENDOR';
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'BLOCKED';
 export type RfqStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED';
-export type QuotationStatus = 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
-export type PoStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED';
-export type InvoiceStatus = 'SUBMITTED' | 'APPROVED' | 'PAID' | 'REJECTED';
+export type QuotationStatus = 'SUBMITTED' | 'SHORTLISTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+export type PoStatus = 'DRAFT' | 'GENERATED' | 'SENT' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED';
+export type InvoiceStatus = 'GENERATED' | 'SENT' | 'APPROVED' | 'PAID' | 'REJECTED' | 'OVERDUE' | 'SUBMITTED';
 
 export interface User {
   id: string;
@@ -59,15 +59,19 @@ export interface QuotationItem {
 
 export interface Approval {
   id: string;
+  quotationId: string;
   approved: boolean;
+  status: string;
+  stage: number;
   comments: string;
   createdAt: string;
-  approver: {
+  quotation?: Quotation;
+  approver?: {
     id: string;
     name: string;
     role: Role;
     email: string;
-  };
+  } | null;
 }
 
 export interface Quotation {
@@ -87,6 +91,16 @@ export interface Quotation {
   notes?: string;
   createdAt: string;
   approvals?: Approval[];
+  totalAmount?: number;
+  rfq?: {
+    id: string;
+    title: string;
+    description: string;
+  };
+  vendor?: {
+    id: string;
+    companyName: string;
+  };
 }
 
 export interface PurchaseOrder {
@@ -111,6 +125,11 @@ export interface Invoice {
   vendorName: string;
   amount: number;
   status: InvoiceStatus;
+  subtotal?: number;
+  tax?: number;
+  total?: number;
+  emailStatus?: string;
+  pdfUrl?: string;
   invoiceDate: string;
   dueDate: string;
 }
@@ -144,6 +163,7 @@ interface ProcurementState {
   quotations: Quotation[];
   purchaseOrders: PurchaseOrder[];
   invoices: Invoice[];
+  approvals: Approval[];
   auditLogs: AuditLog[];
   stats: ReportsStats | null;
   loading: boolean;
@@ -154,6 +174,7 @@ interface ProcurementState {
   fetchQuotations: (rfqId?: string) => Promise<void>;
   fetchPurchaseOrders: () => Promise<void>;
   fetchInvoices: () => Promise<void>;
+  fetchApprovals: () => Promise<void>;
   fetchAuditLogs: () => Promise<void>;
   fetchReports: () => Promise<void>;
   initData: () => Promise<void>;
@@ -165,8 +186,12 @@ interface ProcurementState {
   verifyVendor: (vendorId: string, approve: boolean) => Promise<void>;
   createRfq: (rfq: Omit<Rfq, 'id' | 'createdAt' | 'status'>) => Promise<void>;
   submitQuotation: (quotation: Omit<Quotation, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  shortlistQuotation: (quotationId: string) => Promise<void>;
   approveQuotation: (quotationId: string, comments: string, approve: boolean) => Promise<void>;
+  actionApproval: (approvalId: string, approve: boolean, comments: string) => Promise<void>;
   markInvoicePaid: (invoiceId: string) => Promise<void>;
+  emailInvoice: (invoiceId: string) => Promise<void>;
+  downloadInvoicePdf: (invoiceId: string, invoiceNumber: string) => Promise<void>;
   addAuditLog: (category: AuditLog['category'], message: string) => Promise<void>;
 }
 
@@ -190,6 +215,7 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
   quotations: [],
   purchaseOrders: [],
   invoices: [],
+  approvals: [],
   auditLogs: [],
   stats: null,
   loading: false,
@@ -244,6 +270,15 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
     }
   },
 
+  fetchApprovals: async () => {
+    try {
+      const res = await apiClient.get('/approvals');
+      set({ approvals: res.data.data });
+    } catch (err) {
+      console.error('Error fetching approvals:', err);
+    }
+  },
+
   fetchAuditLogs: async () => {
     try {
       const res = await apiClient.get('/audit-logs');
@@ -271,6 +306,7 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
         get().fetchQuotations(),
         get().fetchPurchaseOrders(),
         get().fetchInvoices(),
+        get().fetchApprovals(),
         get().fetchAuditLogs(),
         get().fetchReports()
       ]);
@@ -284,7 +320,6 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
   login: async (email, role) => {
     try {
       console.log('Logging in as role:', role);
-      // Find matching password for email or just use default password
       const password = 'password123';
       const res = await apiClient.post('/auth/login', { email, password });
       
@@ -309,6 +344,7 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
       quotations: [],
       purchaseOrders: [],
       invoices: [],
+      approvals: [],
       auditLogs: [],
       stats: null
     });
@@ -316,7 +352,6 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
 
   addVendor: async (vendor) => {
     try {
-      // Registers as a VENDOR role user + vendor profile
       await apiClient.post('/auth/register', {
         email: `vendor-${Math.random().toString(36).substr(2, 5)}@vendorbridge.com`,
         password: 'password123',
@@ -355,7 +390,8 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
         deliveryTerms: rfq.deliveryTerms,
         paymentTerms: rfq.paymentTerms,
         category: rfq.category,
-        items: rfq.items
+        items: rfq.items,
+        assignedVendors: rfq.assignedVendors
       });
       await get().fetchRfqs();
       await get().fetchAuditLogs();
@@ -385,6 +421,20 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
     }
   },
 
+  shortlistQuotation: async (quotationId) => {
+    try {
+      await apiClient.put(`/quotations/${quotationId}/shortlist`);
+      await Promise.all([
+        get().fetchQuotations(),
+        get().fetchApprovals(),
+        get().fetchAuditLogs(),
+        get().fetchReports()
+      ]);
+    } catch (err) {
+      console.error('Error shortlisting quotation:', err);
+    }
+  },
+
   approveQuotation: async (quotationId, comments, approve) => {
     try {
       await apiClient.put(`/quotations/${quotationId}/approve`, { approve, comments });
@@ -392,11 +442,28 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
         get().fetchQuotations(),
         get().fetchPurchaseOrders(),
         get().fetchInvoices(),
+        get().fetchApprovals(),
         get().fetchAuditLogs(),
         get().fetchReports()
       ]);
     } catch (err) {
       console.error('Error approving quotation:', err);
+    }
+  },
+
+  actionApproval: async (approvalId, approve, comments) => {
+    try {
+      await apiClient.put(`/approvals/${approvalId}/action`, { approve, comments });
+      await Promise.all([
+        get().fetchApprovals(),
+        get().fetchQuotations(),
+        get().fetchPurchaseOrders(),
+        get().fetchInvoices(),
+        get().fetchAuditLogs(),
+        get().fetchReports()
+      ]);
+    } catch (err) {
+      console.error('Error actioning approval:', err);
     }
   },
 
@@ -411,6 +478,37 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
       ]);
     } catch (err) {
       console.error('Error marking invoice paid:', err);
+    }
+  },
+
+  emailInvoice: async (invoiceId) => {
+    try {
+      await apiClient.post(`/invoices/${invoiceId}/email`);
+      await Promise.all([
+        get().fetchInvoices(),
+        get().fetchAuditLogs()
+      ]);
+    } catch (err) {
+      console.error('Error emailing invoice:', err);
+    }
+  },
+
+  downloadInvoicePdf: async (invoiceId, invoiceNumber) => {
+    try {
+      const res = await apiClient.get(`/invoices/${invoiceId}/pdf`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Invoice-${invoiceNumber}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading invoice PDF:', err);
     }
   },
 

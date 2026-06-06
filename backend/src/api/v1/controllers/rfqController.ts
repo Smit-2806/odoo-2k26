@@ -3,7 +3,16 @@ import { prisma } from '../../../database/prisma';
 import { AuthRequest } from '../../../types/user';
 
 export const createRfq = async (req: AuthRequest, res: Response) => {
-  const { title, description, submissionDeadline, deliveryTerms, paymentTerms, category, items } = req.body;
+  const { 
+    title, 
+    description, 
+    submissionDeadline, 
+    deliveryTerms, 
+    paymentTerms, 
+    category, 
+    items,
+    assignedVendors // array of vendorProfile IDs
+  } = req.body;
 
   if (!title || !description || !submissionDeadline || !category || !items || !Array.isArray(items)) {
     return res.status(400).json({
@@ -22,7 +31,7 @@ export const createRfq = async (req: AuthRequest, res: Response) => {
         deliveryTerms: deliveryTerms || 'FOB',
         paymentTerms: paymentTerms || '30 days net',
         creatorId: req.user!.id,
-        status: 'PUBLISHED', // Default status on creation
+        status: 'PUBLISHED', // Default to PUBLISHED
         items: {
           create: items.map((item: any) => ({
             name: item.name,
@@ -30,10 +39,16 @@ export const createRfq = async (req: AuthRequest, res: Response) => {
             uom: item.uom,
             description: item.description || ''
           }))
+        },
+        assignments: {
+          create: (assignedVendors || []).map((vId: string) => ({
+            vendorId: vId
+          }))
         }
       },
       include: {
-        items: true
+        items: true,
+        assignments: true
       }
     });
 
@@ -41,7 +56,7 @@ export const createRfq = async (req: AuthRequest, res: Response) => {
     await prisma.auditLog.create({
       data: {
         category: 'RFQ',
-        message: `RFQ published - "${title}" sent to assigned vendors.`,
+        message: `RFQ published - "${title}" sent to ${assignedVendors?.length || 0} assigned vendors.`,
         user: req.user?.name || 'System'
       }
     });
@@ -76,17 +91,22 @@ export const getRfqs = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      // If they are a VENDOR, show RFQs that match their category or are PUBLISHED
-      // For simplicity, we show all published RFQs that align with the hackathon flow
+      // If role is VENDOR, only return PUBLISHED RFQs that are assigned to them
       rfqs = await prisma.rfq.findMany({
         where: {
-          status: 'PUBLISHED'
+          status: 'PUBLISHED',
+          assignments: {
+            some: {
+              vendorId: profile.id
+            }
+          }
         },
         include: {
           items: true,
           creator: {
             select: { name: true }
-          }
+          },
+          assignments: true
         }
       });
     } else {
@@ -96,14 +116,31 @@ export const getRfqs = async (req: AuthRequest, res: Response) => {
           items: true,
           creator: {
             select: { name: true }
-          }
+          },
+          assignments: true
         }
       });
     }
 
+    // Map output to match frontend expectations (include assignedVendors list of vendor IDs)
+    const formatted = rfqs.map(r => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      status: r.status,
+      category: r.category,
+      submissionDeadline: r.submissionDeadline.toISOString().split('T')[0],
+      deliveryTerms: r.deliveryTerms,
+      paymentTerms: r.paymentTerms,
+      creatorName: r.creator.name,
+      createdAt: r.createdAt.toISOString().split('T')[0],
+      items: r.items,
+      assignedVendors: r.assignments.map(a => a.vendorId)
+    }));
+
     return res.status(200).json({
       success: true,
-      data: rfqs
+      data: formatted
     });
   } catch (error: any) {
     return res.status(500).json({
@@ -121,6 +158,7 @@ export const getRfqById = async (req: AuthRequest, res: Response) => {
       where: { id },
       include: {
         items: true,
+        assignments: true,
         quotations: {
           include: {
             vendor: true
@@ -139,6 +177,51 @@ export const getRfqById = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    const formatted = {
+      id: rfq.id,
+      title: rfq.title,
+      description: rfq.description,
+      status: rfq.status,
+      category: rfq.category,
+      submissionDeadline: rfq.submissionDeadline.toISOString().split('T')[0],
+      deliveryTerms: rfq.deliveryTerms,
+      paymentTerms: rfq.paymentTerms,
+      creatorName: rfq.creator.name,
+      createdAt: rfq.createdAt.toISOString().split('T')[0],
+      items: rfq.items,
+      assignedVendors: rfq.assignments.map(a => a.vendorId),
+      quotations: rfq.quotations
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: formatted
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message || 'Error fetching RFQ.' }
+    });
+  }
+};
+
+export const publishRfq = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const rfq = await prisma.rfq.update({
+      where: { id },
+      data: { status: 'PUBLISHED' }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        category: 'RFQ',
+        message: `RFQ published - "${rfq.title}" status changed to PUBLISHED.`,
+        user: req.user?.name || 'System'
+      }
+    });
+
     return res.status(200).json({
       success: true,
       data: rfq
@@ -146,7 +229,36 @@ export const getRfqById = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     return res.status(500).json({
       success: false,
-      error: { message: error.message || 'Error fetching RFQ.' }
+      error: { message: error.message || 'Error publishing RFQ.' }
+    });
+  }
+};
+
+export const closeRfq = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const rfq = await prisma.rfq.update({
+      where: { id },
+      data: { status: 'CLOSED' }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        category: 'RFQ',
+        message: `RFQ closed - "${rfq.title}" status changed to CLOSED.`,
+        user: req.user?.name || 'System'
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: rfq
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message || 'Error closing RFQ.' }
     });
   }
 };

@@ -38,8 +38,24 @@ model VendorProfile {
   businessFields String   // Comma-separated list for SQLite e.g. "IT,Logistics"
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  
+  rating         Float    @default(5.0)
+  category       String   @default("Furniture")
+  overdueInvoices Int     @default(0)
 
   quotations     Quotation[]
+  assignments    RfqAssignment[]
+}
+
+model RfqAssignment {
+  id        String        @id @default(uuid())
+  rfqId     String
+  rfq       Rfq           @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  vendorId  String
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+
+  @@unique([rfqId, vendorId])
 }
 
 model Rfq {
@@ -59,6 +75,7 @@ model Rfq {
   items           RfqItem[]
   quotations      Quotation[]
   purchaseOrders  PurchaseOrder[]
+  assignments     RfqAssignment[]
 }
 
 model RfqItem {
@@ -127,11 +144,16 @@ model Invoice {
   invoiceNumber   String        @unique
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  status          String        @default("SUBMITTED") // Handled as string enum
+  status          String        @default("GENERATED") // Handled as string enum
   amount          Float
   invoiceDate     DateTime
   dueDate         DateTime
   fileUrl         String?       // Link to uploaded PDF
+  pdfUrl          String?       // Actual backend generated PDF URL
+  tax             Float         @default(0)
+  subtotal        Float         @default(0)
+  total           Float         @default(0)
+  emailStatus     String        @default("PENDING")
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 }
@@ -140,9 +162,11 @@ model Approval {
   id          String    @id @default(uuid())
   quotationId String
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  approverId  String
-  approver    User      @relation(fields: [approverId], references: [id])
+  approverId  String?
+  approver    User?     @relation(fields: [approverId], references: [id])
   approved    Boolean
+  status      String    @default("PENDING")
+  stage       Int       @default(1)
   comments    String?
   createdAt   DateTime  @default(now())
 }
