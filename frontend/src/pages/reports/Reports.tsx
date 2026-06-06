@@ -387,7 +387,7 @@ const CycleTimeChart: React.FC = () => {
 };
 
 export const Reports: React.FC = () => {
-  const { vendors, purchaseOrders, invoices } = useProcurementStore();
+  const { vendors, purchaseOrders, invoices, stats } = useProcurementStore();
 
   const activeVendors = vendors.filter(v => v.status === 'APPROVED').length;
   const overdueInvoices = invoices.filter(i => i.status === 'SUBMITTED').length;
@@ -396,10 +396,14 @@ export const Reports: React.FC = () => {
     ? Math.round((completedPOs / purchaseOrders.length) * 100)
     : 94;
 
+  const totalSpentStr = stats?.kpis?.totalSpent
+    ? `₹${(stats.kpis.totalSpent / 100000).toFixed(1)} L`
+    : '12.4 L';
+
   const kpiCards = [
     {
       label: 'Total Spend',
-      value: '12.4 L',
+      value: totalSpentStr,
       sub: '+18% vs last month',
       icon: <DollarSign className="h-5 w-5" />,
       iconCls: 'text-purple-400 bg-purple-500/10',

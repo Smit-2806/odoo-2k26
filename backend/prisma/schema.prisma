@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -7,53 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum Role {
-  ADMIN
-  PROCUREMENT
-  FINANCE
-  VENDOR
-}
-
-enum VendorStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum RfqStatus {
-  DRAFT
-  PUBLISHED
-  CLOSED
-}
-
-enum QuotationStatus {
-  SUBMITTED
-  UNDER_REVIEW
-  APPROVED
-  REJECTED
-}
-
-enum PoStatus {
-  DRAFT
-  SENT
-  ACCEPTED
-  COMPLETED
-  CANCELLED
-}
-
-enum InvoiceStatus {
-  SUBMITTED
-  APPROVED
-  PAID
-  REJECTED
-}
-
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String
   name      String
-  role      Role     @default(VENDOR)
+  role      String   @default("VENDOR") // Handled as string enum
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -66,19 +25,19 @@ model User {
 }
 
 model VendorProfile {
-  id             String       @id @default(uuid())
-  userId         String       @unique
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyName    String
-  taxId          String       @unique
+  taxId          String   @unique
   phone          String
   address        String
   website        String?
-  status         VendorStatus @default(PENDING)
+  status         String   @default("PENDING") // Handled as string enum
   verifiedAt     DateTime?
-  businessFields String[]     // e.g., ["IT", "Office Supplies", "Logistics"]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  businessFields String   // Comma-separated list for SQLite e.g. "IT,Logistics"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   quotations     Quotation[]
 }
@@ -87,7 +46,8 @@ model Rfq {
   id              String      @id @default(uuid())
   title           String
   description     String
-  status          RfqStatus   @default(DRAFT)
+  category        String      // Added to fix TS compile error on frontend
+  status          String      @default("DRAFT") // Handled as string enum
   submissionDeadline DateTime
   deliveryTerms   String
   paymentTerms    String
@@ -116,19 +76,19 @@ model RfqItem {
 }
 
 model Quotation {
-  id            String          @id @default(uuid())
+  id            String    @id @default(uuid())
   rfqId         String
-  rfq           Rfq             @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  rfq           Rfq       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   vendorId      String
-  vendor        VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  status        QuotationStatus @default(SUBMITTED)
+  vendor        VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  status        String    @default("SUBMITTED") // Handled as string enum
   validUntil    DateTime
-  deliverySchedule String       // Delivery lead time/details
+  deliverySchedule String  // Delivery lead time/details
   paymentTerms  String
   notes         String?
-  totalAmount   Decimal         @db.Decimal(12, 2)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  totalAmount   Float
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   items         QuotationItem[]
   purchaseOrder PurchaseOrder?
@@ -141,8 +101,8 @@ model QuotationItem {
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   rfqItemId   String
   rfqItem     RfqItem   @relation(fields: [rfqItemId], references: [id], onDelete: Cascade)
-  unitPrice   Decimal   @db.Decimal(12, 2)
-  totalPrice  Decimal   @db.Decimal(12, 2)
+  unitPrice   Float
+  totalPrice  Float
   notes       String?
 }
 
@@ -153,8 +113,8 @@ model PurchaseOrder {
   rfq             Rfq           @relation(fields: [rfqId], references: [id])
   quotationId     String        @unique
   quotation       Quotation     @relation(fields: [quotationId], references: [id])
-  status          PoStatus      @default(DRAFT)
-  totalAmount     Decimal       @db.Decimal(12, 2)
+  status          String        @default("DRAFT") // Handled as string enum
+  totalAmount     Float
   shippingAddress String
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -167,8 +127,8 @@ model Invoice {
   invoiceNumber   String        @unique
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  status          InvoiceStatus @default(SUBMITTED)
-  amount          Decimal       @db.Decimal(12, 2)
+  status          String        @default("SUBMITTED") // Handled as string enum
+  amount          Float
   invoiceDate     DateTime
   dueDate         DateTime
   fileUrl         String?       // Link to uploaded PDF
@@ -185,4 +145,12 @@ model Approval {
   approved    Boolean
   comments    String?
   createdAt   DateTime  @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  category  String   // VENDOR, RFQ, APPROVAL, INVOICE, SYSTEM
+  message   String
+  timestamp DateTime @default(now())
+  user      String
 }

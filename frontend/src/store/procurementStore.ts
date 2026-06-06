@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import apiClient from '../api/axios';
 
 export type Role = 'ADMIN' | 'PROCUREMENT' | 'FINANCE' | 'VENDOR';
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'BLOCKED';
@@ -31,6 +32,7 @@ export interface RfqItem {
   name: string;
   quantity: number;
   uom: string;
+  description?: string;
 }
 
 export interface Rfq {
@@ -39,9 +41,11 @@ export interface Rfq {
   description: string;
   status: RfqStatus;
   submissionDeadline: string;
+  deliveryTerms?: string;
+  paymentTerms?: string;
   category: string;
   items: RfqItem[];
-  assignedVendors: string[]; // Vendor IDs
+  assignedVendors: string[];
   createdAt: string;
 }
 
@@ -50,6 +54,7 @@ export interface QuotationItem {
   rfqItemId: string;
   unitPrice: number;
   totalPrice: number;
+  name?: string;
 }
 
 export interface Quotation {
@@ -68,14 +73,6 @@ export interface Quotation {
   grandTotal: number;
   notes?: string;
   createdAt: string;
-}
-
-export interface ApprovalStep {
-  role: string;
-  approverName: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'AWAITING';
-  date?: string;
-  comments?: string;
 }
 
 export interface PurchaseOrder {
@@ -112,6 +109,20 @@ export interface AuditLog {
   user: string;
 }
 
+interface ReportsStats {
+  kpis: {
+    totalSpent: number;
+    totalVendors: number;
+    pendingVendors: number;
+    totalRfqs: number;
+    overdueInvoices: number;
+  };
+  categoryData: { category: string; amount: number }[];
+  monthlyTrend: { month: string; amount: number }[];
+  cycleTimeData: { name: string; days: number }[];
+  vendorPerformance: { name: string; rating: number; onTime: number }[];
+}
+
 interface ProcurementState {
   currentUser: User | null;
   vendors: Vendor[];
@@ -120,270 +131,280 @@ interface ProcurementState {
   purchaseOrders: PurchaseOrder[];
   invoices: Invoice[];
   auditLogs: AuditLog[];
+  stats: ReportsStats | null;
+  loading: boolean;
   
+  // Fetch Actions
+  fetchVendors: () => Promise<void>;
+  fetchRfqs: () => Promise<void>;
+  fetchQuotations: (rfqId?: string) => Promise<void>;
+  fetchPurchaseOrders: () => Promise<void>;
+  fetchInvoices: () => Promise<void>;
+  fetchAuditLogs: () => Promise<void>;
+  fetchReports: () => Promise<void>;
+  initData: () => Promise<void>;
+
   // Actions
-  login: (email: string, role: Role) => void;
+  login: (email: string, role: Role) => Promise<void>;
   logout: () => void;
-  addVendor: (vendor: Omit<Vendor, 'id' | 'rating' | 'overdueInvoices'>) => void;
-  verifyVendor: (vendorId: string, approve: boolean) => void;
-  createRfq: (rfq: Omit<Rfq, 'id' | 'createdAt' | 'status'>) => void;
-  submitQuotation: (quotation: Omit<Quotation, 'id' | 'createdAt' | 'status'>) => void;
-  approveQuotation: (quotationId: string, comments: string, approve: boolean) => void;
-  markInvoicePaid: (invoiceId: string) => void;
-  addAuditLog: (category: AuditLog['category'], message: string) => void;
+  addVendor: (vendor: Omit<Vendor, 'id' | 'rating' | 'overdueInvoices'>) => Promise<void>;
+  verifyVendor: (vendorId: string, approve: boolean) => Promise<void>;
+  createRfq: (rfq: Omit<Rfq, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  submitQuotation: (quotation: Omit<Quotation, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  approveQuotation: (quotationId: string, comments: string, approve: boolean) => Promise<void>;
+  markInvoicePaid: (invoiceId: string) => Promise<void>;
+  addAuditLog: (category: AuditLog['category'], message: string) => Promise<void>;
 }
 
-const mockVendors: Vendor[] = [
-  { id: 'v1', companyName: 'Infra Supplies Pvt Ltd', taxId: '27AABCS1429Bz0', phone: '+91 98765 43210', address: '456, Industrial Estate, Surat', category: 'Furniture', status: 'APPROVED', rating: 4.5, overdueInvoices: 0 },
-  { id: 'v2', companyName: 'Tech Core LTD', taxId: '27AABCS1430Bz1', phone: '+91 98765 43211', address: '101, Tech Park, Bangalore', category: 'IT', status: 'APPROVED', rating: 4.2, overdueInvoices: 0 },
-  { id: 'v3', companyName: 'OfficeNeed Co.', taxId: '27AABCS1431Bz2', phone: '+91 98765 43212', address: '789, Business Square, Ahmedabad', category: 'Office Supplies', status: 'APPROVED', rating: 3.8, overdueInvoices: 1 },
-  { id: 'v4', companyName: 'FastLog Transport', taxId: '27AABCS1432Bz3', phone: '+91 98765 43213', address: '12, Logistics Lane, Surat', category: 'Logistics', status: 'BLOCKED', rating: 2.5, overdueInvoices: 3 },
-  { id: 'v5', companyName: 'Green Services', taxId: '27AABCS1433Bz4', phone: '+91 98765 43214', address: '23, Eco Plaza, Mumbai', category: 'Janitorial', status: 'PENDING', rating: 0.0, overdueInvoices: 0 }
-];
-
-const mockRfqs: Rfq[] = [
-  {
-    id: 'rfq1',
-    title: 'Office Furniture Procurement Q2',
-    description: 'Ergonomic chairs and standing desks for 3rd floor expansion.',
-    status: 'PUBLISHED',
-    submissionDeadline: '2026-06-15',
-    category: 'Furniture',
-    items: [
-      { id: 'item1', name: 'Ergonomic chair', quantity: 25, uom: 'NOS' },
-      { id: 'item2', name: 'Standing desk', quantity: 10, uom: 'NOS' }
-    ],
-    assignedVendors: ['v1', 'v2', 'v3'],
-    createdAt: '2026-06-01'
+const getInitialUser = (): User | null => {
+  const userStr = localStorage.getItem('vendorbridge_user');
+  if (userStr) {
+    try {
+      return JSON.parse(userStr);
+    } catch (e) {
+      return null;
+    }
   }
-];
-
-const mockQuotations: Quotation[] = [
-  {
-    id: 'q1',
-    rfqId: 'rfq1',
-    vendorId: 'v1',
-    vendorName: 'Infra Supplies Pvt Ltd',
-    status: 'APPROVED',
-    deliveryDays: 10,
-    paymentTerms: '20 days net',
-    rating: 4.5,
-    items: [
-      { id: 'qi1', rfqItemId: 'item1', unitPrice: 3500, totalPrice: 87500 },
-      { id: 'qi2', rfqItemId: 'item2', unitPrice: 8200, totalPrice: 82000 }
-    ],
-    gstPercent: 18,
-    subtotal: 169500,
-    gstAmount: 30510,
-    grandTotal: 200010,
-    notes: 'Includes free delivery and assembly.',
-    createdAt: '2026-06-03'
-  },
-  {
-    id: 'q2',
-    rfqId: 'rfq1',
-    vendorId: 'v2',
-    vendorName: 'Tech Core LTD',
-    status: 'UNDER_REVIEW',
-    deliveryDays: 14,
-    paymentTerms: '30 days net',
-    rating: 4.2,
-    items: [
-      { id: 'qi3', rfqItemId: 'item1', unitPrice: 3800, totalPrice: 95000 },
-      { id: 'qi4', rfqItemId: 'item2', unitPrice: 8500, totalPrice: 85000 }
-    ],
-    gstPercent: 18,
-    subtotal: 180000,
-    gstAmount: 32400,
-    grandTotal: 212400,
-    createdAt: '2026-06-04'
-  }
-];
-
-const mockPOs: PurchaseOrder[] = [
-  {
-    id: 'po1',
-    poNumber: 'PO-2026-0001',
-    rfqId: 'rfq1',
-    rfqTitle: 'Office Furniture Procurement Q2',
-    quotationId: 'q1',
-    vendorId: 'v1',
-    vendorName: 'Infra Supplies Pvt Ltd',
-    totalAmount: 200010,
-    shippingAddress: '123 Business Park, Ahmedabad',
-    status: 'ACCEPTED',
-    createdAt: '2026-06-04'
-  }
-];
-
-const mockInvoices: Invoice[] = [
-  {
-    id: 'inv1',
-    invoiceNumber: 'INV-2026-1024',
-    purchaseOrderId: 'po1',
-    purchaseOrderNumber: 'PO-2026-0001',
-    vendorName: 'Infra Supplies Pvt Ltd',
-    amount: 200010,
-    status: 'SUBMITTED',
-    invoiceDate: '2026-06-05',
-    dueDate: '2026-07-05'
-  }
-];
-
-const mockLogs: AuditLog[] = [
-  { id: 'l1', category: 'VENDOR', message: 'Vendor added - FastLog transport registered and pending verifications', timestamp: '2026-06-01T15:20:00Z', user: 'System' },
-  { id: 'l2', category: 'RFQ', message: 'RFQ published - office furniture Q2 sent to 3 vendors', timestamp: '2026-06-02T10:00:00Z', user: 'Rahul Mehta' },
-  { id: 'l3', category: 'APPROVAL', message: 'Approval pending - PO-2026-0001 awaiting L2 approval by Priya Shah', timestamp: '2026-06-04T09:15:00Z', user: 'Rahul Mehta' },
-  { id: 'l4', category: 'APPROVAL', message: 'Quotation selected - Infra Supplies Pvt Ltd selected for office furniture Q2', timestamp: '2026-06-04T21:15:00Z', user: 'Priya Shah' }
-];
+  // Default starting demo session
+  return { id: 'u-officer', email: 'officer@vendorbridge.com', name: 'Rahul Mehta', role: 'PROCUREMENT' };
+};
 
 export const useProcurementStore = create<ProcurementState>((set, get) => ({
-  currentUser: { id: 'u1', email: 'officer@vendorbridge.com', name: 'Rahul Mehta', role: 'PROCUREMENT' },
-  vendors: mockVendors,
-  rfqs: mockRfqs,
-  quotations: mockQuotations,
-  purchaseOrders: mockPOs,
-  invoices: mockInvoices,
-  auditLogs: mockLogs,
+  currentUser: getInitialUser(),
+  vendors: [],
+  rfqs: [],
+  quotations: [],
+  purchaseOrders: [],
+  invoices: [],
+  auditLogs: [],
+  stats: null,
+  loading: false,
 
-  login: (email, role) => {
-    const name = role === 'PROCUREMENT' ? 'Rahul Mehta' : role === 'FINANCE' ? 'Priya Shah' : role === 'ADMIN' ? 'Admin User' : 'Supplier User';
-    set({ currentUser: { id: 'user-' + role.toLowerCase(), email, name, role } });
-    get().addAuditLog('SYSTEM', `${name} logged in as ${role}`);
+  fetchVendors: async () => {
+    try {
+      const res = await apiClient.get('/vendors');
+      set({ vendors: res.data.data });
+    } catch (err) {
+      console.error('Error fetching vendors:', err);
+    }
+  },
+
+  fetchRfqs: async () => {
+    try {
+      const res = await apiClient.get('/rfqs');
+      const formatted = res.data.data.map((r: any) => ({
+        ...r,
+        assignedVendors: r.assignedVendors || []
+      }));
+      set({ rfqs: formatted });
+    } catch (err) {
+      console.error('Error fetching RFQs:', err);
+    }
+  },
+
+  fetchQuotations: async (rfqId) => {
+    try {
+      const url = rfqId ? `/quotations?rfqId=${rfqId}` : '/quotations';
+      const res = await apiClient.get(url);
+      set({ quotations: res.data.data });
+    } catch (err) {
+      console.error('Error fetching quotations:', err);
+    }
+  },
+
+  fetchPurchaseOrders: async () => {
+    try {
+      const res = await apiClient.get('/purchase-orders');
+      set({ purchaseOrders: res.data.data });
+    } catch (err) {
+      console.error('Error fetching purchase orders:', err);
+    }
+  },
+
+  fetchInvoices: async () => {
+    try {
+      const res = await apiClient.get('/invoices');
+      set({ invoices: res.data.data });
+    } catch (err) {
+      console.error('Error fetching invoices:', err);
+    }
+  },
+
+  fetchAuditLogs: async () => {
+    try {
+      const res = await apiClient.get('/audit-logs');
+      set({ auditLogs: res.data.data });
+    } catch (err) {
+      console.error('Error fetching logs:', err);
+    }
+  },
+
+  fetchReports: async () => {
+    try {
+      const res = await apiClient.get('/reports/stats');
+      set({ stats: res.data.data });
+    } catch (err) {
+      console.error('Error fetching report stats:', err);
+    }
+  },
+
+  initData: async () => {
+    set({ loading: true });
+    try {
+      await Promise.all([
+        get().fetchVendors(),
+        get().fetchRfqs(),
+        get().fetchQuotations(),
+        get().fetchPurchaseOrders(),
+        get().fetchInvoices(),
+        get().fetchAuditLogs(),
+        get().fetchReports()
+      ]);
+    } catch (err) {
+      console.error('Error initializing data:', err);
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  login: async (email, role) => {
+    try {
+      console.log('Logging in as role:', role);
+      // Find matching password for email or just use default password
+      const password = 'password123';
+      const res = await apiClient.post('/auth/login', { email, password });
+      
+      const { token, user } = res.data.data;
+      localStorage.setItem('vendorbridge_token', token);
+      localStorage.setItem('vendorbridge_user', JSON.stringify(user));
+      
+      set({ currentUser: user });
+      await get().initData();
+    } catch (err) {
+      console.error('Login error:', err);
+    }
   },
 
   logout: () => {
-    const user = get().currentUser;
-    if (user) {
-      get().addAuditLog('SYSTEM', `${user.name} logged out`);
+    localStorage.removeItem('vendorbridge_token');
+    localStorage.removeItem('vendorbridge_user');
+    set({
+      currentUser: null,
+      vendors: [],
+      rfqs: [],
+      quotations: [],
+      purchaseOrders: [],
+      invoices: [],
+      auditLogs: [],
+      stats: null
+    });
+  },
+
+  addVendor: async (vendor) => {
+    try {
+      // Registers as a VENDOR role user + vendor profile
+      await apiClient.post('/auth/register', {
+        email: `vendor-${Math.random().toString(36).substr(2, 5)}@vendorbridge.com`,
+        password: 'password123',
+        name: vendor.companyName,
+        role: 'VENDOR',
+        companyName: vendor.companyName,
+        taxId: vendor.taxId,
+        phone: vendor.phone,
+        address: vendor.address,
+        businessFields: vendor.category
+      });
+      await get().fetchVendors();
+      await get().fetchAuditLogs();
+    } catch (err) {
+      console.error('Error adding vendor:', err);
     }
-    set({ currentUser: null });
   },
 
-  addVendor: (vendor) => {
-    const newVendor: Vendor = {
-      ...vendor,
-      id: 'v-' + Math.random().toString(36).substr(2, 9),
-      rating: 0.0,
-      overdueInvoices: 0
-    };
-    set((state) => ({ vendors: [...state.vendors, newVendor] }));
-    get().addAuditLog('VENDOR', `Vendor registered - ${vendor.companyName} pending review.`);
+  verifyVendor: async (vendorId, approve) => {
+    try {
+      await apiClient.put(`/vendors/${vendorId}/verify`, { approve });
+      await get().fetchVendors();
+      await get().fetchAuditLogs();
+      await get().fetchReports();
+    } catch (err) {
+      console.error('Error verifying vendor:', err);
+    }
   },
 
-  verifyVendor: (vendorId, approve) => {
-    set((state) => ({
-      vendors: state.vendors.map((v) =>
-        v.id === vendorId ? { ...v, status: approve ? 'APPROVED' : 'REJECTED' } : v
-      )
-    }));
-    const vendor = get().vendors.find(v => v.id === vendorId);
-    get().addAuditLog('VENDOR', `Vendor review - ${vendor?.companyName} status updated to ${approve ? 'APPROVED' : 'REJECTED'}.`);
+  createRfq: async (rfq) => {
+    try {
+      await apiClient.post('/rfqs', {
+        title: rfq.title,
+        description: rfq.description,
+        submissionDeadline: rfq.submissionDeadline,
+        deliveryTerms: rfq.deliveryTerms,
+        paymentTerms: rfq.paymentTerms,
+        items: rfq.items
+      });
+      await get().fetchRfqs();
+      await get().fetchAuditLogs();
+      await get().fetchReports();
+    } catch (err) {
+      console.error('Error creating RFQ:', err);
+    }
   },
 
-  createRfq: (rfq) => {
-    const newRfq: Rfq = {
-      ...rfq,
-      id: 'rfq-' + Math.random().toString(36).substr(2, 9),
-      status: 'PUBLISHED',
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-    set((state) => ({ rfqs: [...state.rfqs, newRfq] }));
-    get().addAuditLog('RFQ', `RFQ published - "${rfq.title}" sent to assigned vendors.`);
-  },
-
-  submitQuotation: (quotation) => {
-    const newQuotation: Quotation = {
-      ...quotation,
-      id: 'q-' + Math.random().toString(36).substr(2, 9),
-      status: 'SUBMITTED',
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-    set((state) => ({ quotations: [...state.quotations, newQuotation] }));
-    get().addAuditLog('RFQ', `Quotation submitted - Bid of ${quotation.grandTotal} received from ${quotation.vendorName}.`);
-  },
-
-  approveQuotation: (quotationId, comments, approve) => {
-    // 1. Update Quotation Status
-    set((state) => ({
-      quotations: state.quotations.map((q) =>
-        q.id === quotationId ? { ...q, status: approve ? 'APPROVED' : 'REJECTED' } : q
-      )
-    }));
-    
-    const quotation = get().quotations.find((q) => q.id === quotationId);
-    if (!quotation) return;
-
-    if (approve) {
-      // 2. Auto-generate Purchase Order
-      const newPoNumber = `PO-${new Date().getFullYear()}-00` + (get().purchaseOrders.length + 1);
-      const newPO: PurchaseOrder = {
-        id: 'po-' + Math.random().toString(36).substr(2, 9),
-        poNumber: newPoNumber,
+  submitQuotation: async (quotation) => {
+    try {
+      await apiClient.post('/quotations', {
         rfqId: quotation.rfqId,
-        rfqTitle: get().rfqs.find(r => r.id === quotation.rfqId)?.title || 'Office Procurement',
-        quotationId: quotation.id,
-        vendorId: quotation.vendorId,
-        vendorName: quotation.vendorName,
-        totalAmount: Number(quotation.grandTotal),
-        shippingAddress: '123 Business Park, Ahmedabad',
-        status: 'SENT',
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      
-      // 3. Auto-generate Invoice
-      const newInvNumber = `INV-${new Date().getFullYear()}-10` + (get().invoices.length + 24);
-      const newInvoice: Invoice = {
-        id: 'inv-' + Math.random().toString(36).substr(2, 9),
-        invoiceNumber: newInvNumber,
-        purchaseOrderId: newPO.id,
-        purchaseOrderNumber: newPO.poNumber,
-        vendorName: newPO.vendorName,
-        amount: newPO.totalAmount,
-        status: 'SUBMITTED',
-        invoiceDate: new Date().toISOString().split('T')[0],
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      };
-
-      set((state) => ({
-        purchaseOrders: [...state.purchaseOrders, newPO],
-        invoices: [...state.invoices, newInvoice]
-      }));
-
-      get().addAuditLog('APPROVAL', `Quotation approved - PO ${newPO.poNumber} generated for ${quotation.vendorName}. Comments: ${comments}`);
-    } else {
-      get().addAuditLog('APPROVAL', `Quotation rejected - Bid from ${quotation.vendorName} marked rejected. Comments: ${comments}`);
+        deliveryDays: quotation.deliveryDays,
+        paymentTerms: quotation.paymentTerms,
+        notes: quotation.notes,
+        items: quotation.items.map(item => ({
+          rfqItemId: item.rfqItemId,
+          unitPrice: item.unitPrice
+        })),
+        gstPercent: quotation.gstPercent
+      });
+      await get().fetchQuotations();
+      await get().fetchAuditLogs();
+    } catch (err) {
+      console.error('Error submitting quotation:', err);
     }
   },
 
-  markInvoicePaid: (invoiceId) => {
-    set((state) => ({
-      invoices: state.invoices.map((inv) =>
-        inv.id === invoiceId ? { ...inv, status: 'PAID' } : inv
-      )
-    }));
-    
-    const invoice = get().invoices.find(i => i.id === invoiceId);
-    if (invoice) {
-      // Complete purchase order status
-      set((state) => ({
-        purchaseOrders: state.purchaseOrders.map((po) =>
-          po.id === invoice.purchaseOrderId ? { ...po, status: 'COMPLETED' } : po
-        )
-      }));
-      get().addAuditLog('INVOICE', `Payment processed - Invoice ${invoice.invoiceNumber} marked as PAID.`);
+  approveQuotation: async (quotationId, comments, approve) => {
+    try {
+      await apiClient.put(`/quotations/${quotationId}/approve`, { approve, comments });
+      await Promise.all([
+        get().fetchQuotations(),
+        get().fetchPurchaseOrders(),
+        get().fetchInvoices(),
+        get().fetchAuditLogs(),
+        get().fetchReports()
+      ]);
+    } catch (err) {
+      console.error('Error approving quotation:', err);
     }
   },
 
-  addAuditLog: (category, message) => {
-    const newLog: AuditLog = {
-      id: 'log-' + Math.random().toString(36).substr(2, 9),
-      category,
-      message,
-      timestamp: new Date().toISOString(),
-      user: get().currentUser?.name || 'System'
-    };
-    // Immutable array push
-    set((state) => ({ auditLogs: [...state.auditLogs, newLog] }));
+  markInvoicePaid: async (invoiceId) => {
+    try {
+      await apiClient.put(`/invoices/${invoiceId}/status`, { status: 'PAID' });
+      await Promise.all([
+        get().fetchInvoices(),
+        get().fetchPurchaseOrders(),
+        get().fetchAuditLogs(),
+        get().fetchReports()
+      ]);
+    } catch (err) {
+      console.error('Error marking invoice paid:', err);
+    }
+  },
+
+  addAuditLog: async (category, message) => {
+    try {
+      await apiClient.post('/audit-logs', { category, message });
+      await get().fetchAuditLogs();
+    } catch (err) {
+      console.error('Error adding audit log:', err);
+    }
   }
 }));

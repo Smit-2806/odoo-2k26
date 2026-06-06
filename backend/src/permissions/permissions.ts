@@ -1,2 +1,2 @@
 // Permission list
-export {{}};
+export {};

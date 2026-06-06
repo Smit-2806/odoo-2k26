@@ -1,3 +1,55 @@
-import { Router } from "express";
+import { Router } from 'express';
+import { authenticate } from '../../../middleware/authenticate';
+import { authorize } from '../../../middleware/authorize';
+
+// Controllers
+import * as auth from '../controllers/authController';
+import * as vendors from '../controllers/vendorController';
+import * as rfqs from '../controllers/rfqController';
+import * as quotations from '../controllers/quotationController';
+import * as pos from '../controllers/poController';
+import * as invoices from '../controllers/invoiceController';
+import * as reports from '../controllers/reportController';
+import * as logs from '../controllers/logController';
+
 const router = Router();
+
+// 1. Authentication
+router.post('/auth/register', auth.register);
+router.post('/auth/login', auth.login);
+router.get('/auth/me', authenticate as any, auth.getMe);
+
+// 2. Vendors
+router.get('/vendors', authenticate as any, authorize(['ADMIN', 'PROCUREMENT']) as any, vendors.getVendors);
+router.get('/vendors/:id', authenticate as any, authorize(['ADMIN', 'PROCUREMENT']) as any, vendors.getVendorById);
+router.put('/vendors/:id/verify', authenticate as any, authorize(['ADMIN']) as any, vendors.verifyVendor);
+router.put('/vendors/:id/block', authenticate as any, authorize(['ADMIN']) as any, vendors.blockVendor);
+
+// 3. RFQs
+router.post('/rfqs', authenticate as any, authorize(['ADMIN', 'PROCUREMENT']) as any, rfqs.createRfq);
+router.get('/rfqs', authenticate as any, rfqs.getRfqs);
+router.get('/rfqs/:id', authenticate as any, rfqs.getRfqById);
+
+// 4. Quotations
+router.post('/quotations', authenticate as any, authorize(['VENDOR']) as any, quotations.submitQuotation);
+router.get('/quotations', authenticate as any, quotations.getQuotations);
+router.get('/quotations/:id', authenticate as any, quotations.getQuotationById);
+router.put('/quotations/:id/approve', authenticate as any, authorize(['ADMIN', 'PROCUREMENT', 'FINANCE']) as any, quotations.approveQuotation);
+
+// 5. Purchase Orders
+router.get('/purchase-orders', authenticate as any, pos.getPurchaseOrders);
+router.get('/purchase-orders/:id', authenticate as any, pos.getPoById);
+router.put('/purchase-orders/:id/status', authenticate as any, pos.updatePoStatus);
+
+// 6. Invoices
+router.get('/invoices', authenticate as any, invoices.getInvoices);
+router.put('/invoices/:id/status', authenticate as any, authorize(['ADMIN', 'FINANCE']) as any, invoices.updateInvoiceStatus);
+
+// 7. Reports
+router.get('/reports/stats', authenticate as any, reports.getStats);
+
+// 8. Audit Logs
+router.get('/audit-logs', authenticate as any, logs.getAuditLogs);
+router.post('/audit-logs', authenticate as any, logs.createAuditLog);
+
 export default router;

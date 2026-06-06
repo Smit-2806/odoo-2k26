@@ -10,9 +10,15 @@ import {
 } from 'lucide-react';
 
 export const DashboardLayout: React.FC = () => {
-  const { currentUser, login, logout } = useProcurementStore();
+  const { currentUser, login, logout, initData } = useProcurementStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  React.useEffect(() => {
+    if (currentUser) {
+      initData();
+    }
+  }, [currentUser, initData]);
 
   const navItems = [
     {

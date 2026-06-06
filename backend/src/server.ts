@@ -19,7 +19,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+import apiRouter from "./api/v1/routes";
+
 // API Routes
+app.use("/api/v1", apiRouter);
+
 app.get("/api/health", async (req: Request, res: Response) => {
   try {
     // Check database connection

@@ -1,2 +1,2 @@
 // Role configurations
-export {{}};
+export {};
