@@ -135,12 +135,12 @@ export const DashboardLayout: React.FC = () => {
       <header className="border-b border-slate-900/80 bg-[#020617]/90 backdrop-blur-md sticky top-0 z-50 h-16 flex items-center justify-between px-6 shrink-0">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div
-            className="h-9 w-9 rounded-xl bg-gradient-to-tr from-purple-600 to-blue-500 flex items-center justify-center font-black text-white text-sm shadow-lg shadow-purple-600/30 cursor-pointer"
+          <img
+            src="/VendorBridgeLogo.png"
+            alt="VendorBridge Logo"
+            className="h-9 w-auto max-w-[150px] object-contain cursor-pointer hover:opacity-95 transition-all"
             onClick={() => navigate('/dashboard')}
-          >
-            VB
-          </div>
+          />
           <div className="flex flex-col leading-none">
             <span className="font-bold text-base tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
               VendorBridge
@@ -159,7 +159,8 @@ export const DashboardLayout: React.FC = () => {
             <select
               value={currentUser?.role || ''}
               onChange={(e) => handleRoleChange(e.target.value as Role)}
-              className="bg-transparent text-xs font-bold focus:outline-none cursor-pointer text-purple-400"
+              disabled={currentUser?.role === 'PROCUREMENT'}
+              className="bg-transparent text-xs font-bold focus:outline-none cursor-pointer text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="PROCUREMENT" className="bg-slate-950 text-slate-100">Procurement Officer</option>
               <option value="FINANCE" className="bg-slate-950 text-slate-100">Finance Manager</option>
