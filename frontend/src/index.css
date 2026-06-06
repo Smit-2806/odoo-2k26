@@ -191,3 +191,117 @@ body {
   .no-print { display: none !important; }
   .print-card { background: white !important; color: black !important; border: 1px solid #ccc !important; }
 }
+
+/* ─── Theme CSS Variables & Overrides ────────────────────────── */
+:root {
+  --bg-app: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.85);
+  --border-app: #cbd5e1;
+  --border-card: rgba(203, 213, 225, 0.6);
+  --text-app: #0f172a;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --bg-card: rgba(241, 245, 249, 0.5);
+  --bg-input: #ffffff;
+  --bg-select-option: #ffffff;
+}
+
+html.dark {
+  --bg-app: #020617;
+  --bg-sidebar: #0b0f19;
+  --bg-header: rgba(2, 6, 23, 0.9);
+  --border-app: #1e293b;
+  --border-card: rgba(51, 65, 85, 0.5);
+  --text-app: #f1f5f9;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --bg-card: rgba(15, 23, 42, 0.6);
+  --bg-input: rgba(2, 6, 23, 0.8);
+  --bg-select-option: #020617;
+}
+
+/* Base modifications */
+body {
+  background-color: var(--bg-app);
+  color: var(--text-app);
+  transition: background-color 0.25s, color 0.25s;
+}
+
+/* Light mode selector overrides */
+html:not(.dark) {
+  /* Override backgrounds */
+  .bg-\[\#020617\] { background-color: var(--bg-app) !important; }
+  .bg-\[\#020617\]\/\@90 { background-color: var(--bg-header) !important; }
+  .bg-\[\#020617\]\/90 { background-color: var(--bg-header) !important; }
+  .bg-\[\#020617\]\/60 { background-color: var(--bg-sidebar) !important; }
+  .bg-\[\#020617\]\/60 { background-color: var(--bg-sidebar) !important; }
+  .bg-\[\#020617\] { background-color: var(--bg-app) !important; }
+  
+  .bg-slate-900\/40 { background-color: var(--bg-card) !important; }
+  .bg-slate-950\/40 { background-color: rgba(226, 232, 240, 0.3) !important; }
+  .bg-slate-950\/50 { background-color: rgba(226, 232, 240, 0.4) !important; }
+  .bg-slate-950\/60 { background-color: rgba(226, 232, 240, 0.5) !important; }
+  .bg-slate-950 { background-color: #f1f5f9 !important; }
+  .bg-slate-900 { background-color: #e2e8f0 !important; }
+  .bg-slate-900\/60 { background-color: #f1f5f9 !important; }
+  .hover\:bg-slate-900:hover { background-color: #e2e8f0 !important; }
+  .hover\:bg-slate-900\/60:hover { background-color: #e2e8f0 !important; }
+  
+  /* Sidebar */
+  aside {
+    background-color: var(--bg-sidebar) !important;
+  }
+  
+  /* Text overrides */
+  .text-slate-100 { color: var(--text-app) !important; }
+  .text-slate-200 { color: var(--text-primary) !important; }
+  .text-slate-300 { color: var(--text-primary) !important; }
+  .text-slate-400 { color: var(--text-secondary) !important; }
+  .text-slate-500 { color: var(--text-muted) !important; }
+  .text-slate-600 { color: var(--text-muted) !important; }
+  .hover\:text-white:hover { color: #020617 !important; }
+  .group:hover .group-hover\:text-slate-400 { color: #334155 !important; }
+  
+  /* Borders */
+  .border-slate-800 { border-color: var(--border-app) !important; }
+  .border-slate-800\/60 { border-color: var(--border-card) !important; }
+  .border-slate-800\/40 { border-color: var(--border-card) !important; }
+  .border-slate-900 { border-color: var(--border-app) !important; }
+  .border-slate-900\/60 { border-color: var(--border-card) !important; }
+  .border-slate-900\/80 { border-color: var(--border-card) !important; }
+  .border-slate-700 { border-color: var(--border-app) !important; }
+  
+  /* Inputs */
+  .vb-input {
+    background-color: var(--bg-input) !important;
+    color: var(--text-app) !important;
+    border-color: var(--border-app) !important;
+  }
+  .vb-input::placeholder {
+    color: #94a3b8 !important;
+  }
+  
+  /* Tables */
+  .vb-table thead tr {
+    background: rgba(226, 232, 240, 0.5) !important;
+    border-bottom-color: var(--border-app) !important;
+  }
+  .vb-table tbody tr {
+    border-bottom-color: var(--border-card) !important;
+  }
+  .vb-table tbody tr:hover {
+    background: rgba(226, 232, 240, 0.2) !important;
+  }
+  .vb-table tbody td {
+    color: var(--text-secondary) !important;
+  }
+  
+  /* Custom option backgrounds for select dropdown */
+  option {
+    background-color: var(--bg-select-option) !important;
+    color: var(--text-app) !important;
+  }
+}
