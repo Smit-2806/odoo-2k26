@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, FileSignature, Layers,
   CheckSquare, ShoppingBag, Receipt, BarChart3,
   Activity, LogOut, User as UserIcon, ChevronRight,
-  Bell, Settings, Sun, Moon
+  Bell, Settings
 } from 'lucide-react';
 
 export const DashboardLayout: React.FC = () => {
@@ -14,25 +14,12 @@ export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [theme, setTheme] = React.useState<'light' | 'dark'>(
-    (localStorage.getItem('vendorbridge_theme') as 'light' | 'dark') || 'dark'
-  );
-
   React.useEffect(() => {
     const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-      root.classList.remove('light');
-    } else {
-      root.classList.add('light');
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('vendorbridge_theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
+    root.classList.remove('dark');
+    root.classList.add('light');
+    localStorage.setItem('vendorbridge_theme', 'light');
+  }, []);
 
   React.useEffect(() => {
     if (currentUser) {
@@ -154,13 +141,21 @@ export const DashboardLayout: React.FC = () => {
       {/* ─── Top Header ───────────────────────────────────────── */}
       <header className="border-b border-slate-900/80 bg-[#020617]/90 backdrop-blur-md sticky top-0 z-50 h-16 flex items-center justify-between px-6 shrink-0">
         {/* Logo */}
-        <div className="flex items-center">
-          <img
-            src="/VendorBridgeLogo.png"
-            alt="VendorBridge Logo"
-            className="h-12 w-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform"
+        <div className="flex items-center gap-3">
+          <div
+            className="h-9 w-9 rounded-xl bg-gradient-to-tr from-purple-600 to-blue-500 flex items-center justify-center font-black text-white text-sm shadow-lg shadow-purple-600/30 cursor-pointer"
             onClick={() => navigate('/dashboard')}
-          />
+          >
+            VB
+          </div>
+          <div className="flex flex-col leading-none">
+            <span className="font-bold text-base tracking-tight text-slate-800">
+              VendorBridge
+            </span>
+            <span className="text-[9px] text-slate-500 font-semibold tracking-widest uppercase">
+              ERP Platform
+            </span>
+          </div>
         </div>
 
         {/* Right side controls */}
@@ -185,15 +180,6 @@ export const DashboardLayout: React.FC = () => {
           <button className="relative p-2 rounded-lg border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition-colors">
             <Bell className="h-4 w-4" />
             <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 bg-purple-500 rounded-full" />
-          </button>
-
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition-colors"
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-blue-500" />}
           </button>
 
           {/* User Info */}
