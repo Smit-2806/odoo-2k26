@@ -22,6 +22,7 @@ model User {
   // Audits and actions
   createdRfqs   Rfq[]          @relation("RfqCreator")
   approvals     Approval[]
+  notifications Notification[]
 }
 
 model VendorProfile {
@@ -177,4 +178,41 @@ model AuditLog {
   message   String
   timestamp DateTime @default(now())
   user      String
+}
+
+model FinanceBudget {
+  id        String   @id @default(uuid())
+  name      String
+  amount    Float
+  used      Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expenses  Expense[]
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  budgetId    String
+  budget      FinanceBudget @relation(fields: [budgetId], references: [id])
+  description String
+  amount      Float
+  incurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  type        String   // PDF, CSV, etc.
+  generatedAt DateTime @default(now())
+  fileUrl     String?
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

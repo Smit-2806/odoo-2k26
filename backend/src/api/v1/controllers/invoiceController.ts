@@ -116,6 +116,32 @@ export const updateInvoiceStatus = async (req: AuthRequest, res: Response) => {
         });
       }
 
+      // Notify vendor
+      try {
+        const poWithQuotation = await tx.purchaseOrder.findUnique({
+          where: { id: inv.purchaseOrderId },
+          include: {
+            quotation: {
+              include: {
+                vendor: true
+              }
+            }
+          }
+        });
+
+        if (poWithQuotation) {
+          const vendorUserId = poWithQuotation.quotation.vendor.userId;
+          await tx.notification.create({
+            data: {
+              userId: vendorUserId,
+              message: `Invoice ${inv.invoiceNumber} status has been updated to ${status}.`
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error notifying vendor of invoice status update:', err);
+      }
+
       return inv;
     });
 

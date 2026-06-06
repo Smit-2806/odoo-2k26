@@ -142,6 +142,34 @@ export interface AuditLog {
   user: string;
 }
 
+export interface Expense {
+  id: string;
+  budgetId: string;
+  description: string;
+  amount: number;
+  incurredAt: string;
+  createdAt: string;
+  budget?: FinanceBudget;
+}
+
+export interface FinanceBudget {
+  id: string;
+  name: string;
+  amount: number;
+  used: number;
+  createdAt: string;
+  updatedAt: string;
+  expenses?: Expense[];
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
 interface ReportsStats {
   kpis: {
     totalSpent: number;
@@ -165,6 +193,9 @@ interface ProcurementState {
   invoices: Invoice[];
   approvals: Approval[];
   auditLogs: AuditLog[];
+  budgets: FinanceBudget[];
+  expenses: Expense[];
+  notifications: Notification[];
   stats: ReportsStats | null;
   loading: boolean;
   
@@ -177,6 +208,9 @@ interface ProcurementState {
   fetchApprovals: () => Promise<void>;
   fetchAuditLogs: () => Promise<void>;
   fetchReports: () => Promise<void>;
+  fetchBudgets: () => Promise<void>;
+  fetchExpenses: () => Promise<void>;
+  fetchNotifications: () => Promise<void>;
   initData: () => Promise<void>;
 
   // Actions
@@ -193,6 +227,12 @@ interface ProcurementState {
   emailInvoice: (invoiceId: string) => Promise<void>;
   downloadInvoicePdf: (invoiceId: string, invoiceNumber: string) => Promise<void>;
   addAuditLog: (category: AuditLog['category'], message: string) => Promise<void>;
+  createBudget: (name: string, amount: number) => Promise<void>;
+  createExpense: (budgetId: string, description: string, amount: number) => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  downloadReportPdf: () => Promise<void>;
+  downloadReportCsv: () => Promise<void>;
 }
 
 const getInitialUser = (): User | null => {
@@ -217,6 +257,9 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
   invoices: [],
   approvals: [],
   auditLogs: [],
+  budgets: [],
+  expenses: [],
+  notifications: [],
   stats: null,
   loading: false,
 
@@ -297,6 +340,33 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
     }
   },
 
+  fetchBudgets: async () => {
+    try {
+      const res = await apiClient.get('/finance/budgets');
+      set({ budgets: res.data.data });
+    } catch (err) {
+      console.error('Error fetching budgets:', err);
+    }
+  },
+
+  fetchExpenses: async () => {
+    try {
+      const res = await apiClient.get('/finance/expenses');
+      set({ expenses: res.data.data });
+    } catch (err) {
+      console.error('Error fetching expenses:', err);
+    }
+  },
+
+  fetchNotifications: async () => {
+    try {
+      const res = await apiClient.get('/notifications');
+      set({ notifications: res.data.data });
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  },
+
   initData: async () => {
     set({ loading: true });
     try {
@@ -308,7 +378,10 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
         get().fetchInvoices(),
         get().fetchApprovals(),
         get().fetchAuditLogs(),
-        get().fetchReports()
+        get().fetchReports(),
+        get().fetchBudgets(),
+        get().fetchExpenses(),
+        get().fetchNotifications()
       ]);
     } catch (err) {
       console.error('Error initializing data:', err);
@@ -518,6 +591,87 @@ export const useProcurementStore = create<ProcurementState>((set, get) => ({
       await get().fetchAuditLogs();
     } catch (err) {
       console.error('Error adding audit log:', err);
+    }
+  },
+
+  createBudget: async (name, amount) => {
+    try {
+      await apiClient.post('/finance/budgets', { name, amount });
+      await Promise.all([
+        get().fetchBudgets(),
+        get().fetchAuditLogs()
+      ]);
+    } catch (err) {
+      console.error('Error creating budget:', err);
+    }
+  },
+
+  createExpense: async (budgetId, description, amount) => {
+    try {
+      await apiClient.post('/finance/expenses', { budgetId, description, amount });
+      await Promise.all([
+        get().fetchBudgets(),
+        get().fetchExpenses(),
+        get().fetchAuditLogs()
+      ]);
+    } catch (err) {
+      console.error('Error creating expense:', err);
+    }
+  },
+
+  markNotificationRead: async (id) => {
+    try {
+      await apiClient.put(`/notifications/${id}/read`);
+      await get().fetchNotifications();
+    } catch (err) {
+      console.error('Error marking notification read:', err);
+    }
+  },
+
+  markAllNotificationsRead: async () => {
+    try {
+      await apiClient.put('/notifications/read-all');
+      await get().fetchNotifications();
+    } catch (err) {
+      console.error('Error marking all notifications read:', err);
+    }
+  },
+
+  downloadReportPdf: async () => {
+    try {
+      const res = await apiClient.get('/reports/download/pdf', {
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Spend-Analytics-Report.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading report PDF:', err);
+    }
+  },
+
+  downloadReportCsv: async () => {
+    try {
+      const res = await apiClient.get('/reports/download/csv', {
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Spend-Analytics-Report.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading report CSV:', err);
     }
   }
 }));

@@ -117,6 +117,21 @@ export const submitQuotation = async (req: AuthRequest, res: Response) => {
       }
     });
 
+    // Notify RFQ creator
+    try {
+      const rfq = await prisma.rfq.findUnique({ where: { id: rfqId } });
+      if (rfq) {
+        await prisma.notification.create({
+          data: {
+            userId: rfq.creatorId,
+            message: `New bid submitted for RFQ "${rfq.title}" by ${vendorProfile.companyName}`
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Error notifying RFQ creator of bid:', err);
+    }
+
     return res.status(201).json({
       success: true,
       data: quotation
@@ -395,6 +410,14 @@ export const approveQuotation = async (req: AuthRequest, res: Response) => {
             user: req.user?.name || 'System'
           }
         });
+
+        // Notify Vendor
+        await tx.notification.create({
+          data: {
+            userId: quotation.vendor.userId,
+            message: `Your quotation for RFQ "${quotation.rfq.title}" has been approved! Purchase Order generated.`
+          }
+        });
       } else if (!approve) {
         // Rejection Audit Log
         await tx.auditLog.create({
@@ -402,6 +425,14 @@ export const approveQuotation = async (req: AuthRequest, res: Response) => {
             category: 'APPROVAL',
             message: `Quotation rejected (${userRole === 'PROCUREMENT' ? 'L1' : 'L2'}) - Bid from ${quotation.vendor.companyName} marked rejected. Comments: ${comments || 'None'}`,
             user: req.user?.name || 'System'
+          }
+        });
+
+        // Notify Vendor
+        await tx.notification.create({
+          data: {
+            userId: quotation.vendor.userId,
+            message: `Your quotation for RFQ "${quotation.rfq.title}" was rejected. Comments: ${comments || 'None'}`
           }
         });
       } else {
@@ -413,6 +444,19 @@ export const approveQuotation = async (req: AuthRequest, res: Response) => {
             user: req.user?.name || 'System'
           }
         });
+
+        // Notify Finance users
+        const financeUsers = await tx.user.findMany({
+          where: { role: 'FINANCE' }
+        });
+        for (const fUser of financeUsers) {
+          await tx.notification.create({
+            data: {
+              userId: fUser.id,
+              message: `New quotation recommendation from Procurement for RFQ "${quotation.rfq.title}". Awaiting L2 approval.`
+            }
+          });
+        }
       }
 
       return q;

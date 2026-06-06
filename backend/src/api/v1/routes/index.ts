@@ -12,6 +12,8 @@ import * as invoices from '../controllers/invoiceController';
 import * as reports from '../controllers/reportController';
 import * as logs from '../controllers/logController';
 import * as approvals from '../controllers/approvalController';
+import * as finance from '../controllers/financeController';
+import * as notification from '../controllers/notificationController';
 
 const router = Router();
 
@@ -58,9 +60,22 @@ router.post('/invoices/:id/email', authenticate as any, invoices.emailInvoice);
 
 // 7. Reports
 router.get('/reports/stats', authenticate as any, reports.getStats);
+router.get('/reports/download/pdf', authenticate as any, reports.downloadPdf);
+router.get('/reports/download/csv', authenticate as any, reports.downloadCsv);
 
 // 8. Audit Logs
 router.get('/audit-logs', authenticate as any, logs.getAuditLogs);
 router.post('/audit-logs', authenticate as any, logs.createAuditLog);
+
+// 9. Finance (Budgets & Expenses)
+router.get('/finance/budgets', authenticate as any, finance.getBudgets);
+router.post('/finance/budgets', authenticate as any, authorize(['ADMIN', 'FINANCE']) as any, finance.createBudget);
+router.get('/finance/expenses', authenticate as any, finance.getExpenses);
+router.post('/finance/expenses', authenticate as any, authorize(['ADMIN', 'FINANCE']) as any, finance.createExpense);
+
+// 10. Notifications
+router.get('/notifications', authenticate as any, notification.getNotifications);
+router.put('/notifications/:id/read', authenticate as any, notification.markRead);
+router.put('/notifications/read-all', authenticate as any, notification.markAllRead);
 
 export default router;

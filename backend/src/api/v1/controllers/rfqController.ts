@@ -61,6 +61,25 @@ export const createRfq = async (req: AuthRequest, res: Response) => {
       }
     });
 
+    // Notify assigned vendors
+    if (assignedVendors && assignedVendors.length > 0) {
+      try {
+        const vendors = await prisma.vendorProfile.findMany({
+          where: { id: { in: assignedVendors } }
+        });
+        for (const vendor of vendors) {
+          await prisma.notification.create({
+            data: {
+              userId: vendor.userId,
+              message: `New Request for Quotation (RFQ) published: "${title}"`
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error creating RFQ vendor notifications:', err);
+      }
+    }
+
     return res.status(201).json({
       success: true,
       data: rfq

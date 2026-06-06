@@ -6,11 +6,11 @@ import {
   LayoutDashboard, Users, FileSignature, Layers,
   CheckSquare, ShoppingBag, Receipt, BarChart3,
   Activity, LogOut, User as UserIcon, ChevronRight,
-  Bell, Settings
+  Bell, Settings, DollarSign
 } from 'lucide-react';
 
 export const DashboardLayout: React.FC = () => {
-  const { currentUser, login, logout, initData } = useProcurementStore();
+  const { currentUser, login, logout, initData, notifications } = useProcurementStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -78,10 +78,24 @@ export const DashboardLayout: React.FC = () => {
       exact: false,
     },
     {
+      name: 'Finance & Budget',
+      path: '/dashboard/finance',
+      icon: <DollarSign className="h-4 w-4" />,
+      roles: ['ADMIN', 'FINANCE', 'PROCUREMENT'],
+      exact: false,
+    },
+    {
       name: 'Reports',
       path: '/dashboard/reports',
       icon: <BarChart3 className="h-4 w-4" />,
       roles: ['ADMIN', 'PROCUREMENT', 'FINANCE'],
+      exact: false,
+    },
+    {
+      name: 'Notifications',
+      path: '/dashboard/notifications',
+      icon: <Bell className="h-4 w-4" />,
+      roles: ['ADMIN', 'PROCUREMENT', 'FINANCE', 'VENDOR'],
       exact: false,
     },
     {
@@ -177,9 +191,16 @@ export const DashboardLayout: React.FC = () => {
           </div>
 
           {/* Notification Bell */}
-          <button className="relative p-2 rounded-lg border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition-colors">
+          <button
+            onClick={() => navigate('/dashboard/notifications')}
+            className="relative p-2 rounded-lg border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition-colors"
+          >
             <Bell className="h-4 w-4" />
-            <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 bg-purple-500 rounded-full" />
+            {notifications.filter(n => !n.read).length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 bg-purple-500 rounded-full text-[9px] font-black text-white flex items-center justify-center animate-pulse">
+                {notifications.filter(n => !n.read).length}
+              </span>
+            )}
           </button>
 
           {/* User Info */}

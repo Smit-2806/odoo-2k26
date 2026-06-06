@@ -16,6 +16,8 @@ import { PurchaseOrders } from '../pages/purchase-orders/PurchaseOrders';
 import { Invoices } from '../pages/invoices/Invoices';
 import { ActivityLogs } from '../pages/notifications/ActivityLogs';
 import { Reports } from '../pages/reports/Reports';
+import { Budget } from '../pages/finance/Budget';
+import { Notifications } from '../pages/notifications/Notifications';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleGuard } from './RoleGuard';
 
@@ -98,6 +100,22 @@ export const AppRouter: React.FC = () => {
             element={
               <RoleGuard allowedRoles={['ADMIN', 'FINANCE', 'VENDOR']}>
                 <Invoices />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="finance" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'FINANCE', 'PROCUREMENT']}>
+                <Budget />
+              </RoleGuard>
+            } 
+          />
+          <Route 
+            path="notifications" 
+            element={
+              <RoleGuard allowedRoles={['ADMIN', 'FINANCE', 'PROCUREMENT', 'VENDOR']}>
+                <Notifications />
               </RoleGuard>
             } 
           />
